@@ -1,0 +1,18 @@
+{
+  "name": "Günce - Sıcak ve Minimalist Günlüğün",
+  "short_name": "Günce",
+  "description": "Sıcak, ferah ve minimalist bir tasarıma sahip kişisel mobil günlüğün. Gününü özetle ve puanla.",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#fdfaf7",
+  "theme_color": "#f27d52",
+  "icons": [
+    {
+      "src": "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='45' fill='%23f27d52'/><path d='M30 45 C35 30, 65 30, 70 45 C65 60, 35 60, 30 45 Z' fill='%23ffffff' opacity='0.9'/><circle cx='43' cy='42' r='3' fill='%23f27d52'/><circle cx='57' cy='42' r='3' fill='%23f27d52'/><path d='M46 50 Q50 54 54 50' stroke='%23f27d52' stroke-width='2.5' stroke-linecap='round' fill='none'/></svg>",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
