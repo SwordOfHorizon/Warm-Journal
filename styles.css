@@ -516,6 +516,11 @@ body {
     border-color: var(--primary-terracotta-light);
 }
 
+.header-actions {
+    display: flex;
+    gap: 8px;
+}
+
 .dashboard-content {
     display: flex;
     flex-direction: column;
@@ -1561,6 +1566,369 @@ body {
     0% { transform: scale(1); }
     50% { transform: scale(1.025); }
     100% { transform: scale(1); }
+}
+
+/* 13.1. Dönemsel Raporlar Ekran Stilleri */
+.reports-content {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    padding-bottom: 30px;
+}
+
+.reports-tabs {
+    display: flex;
+    background-color: var(--white);
+    border: 1.5px solid var(--card-border);
+    border-radius: var(--border-radius-md);
+    padding: 4px;
+    box-shadow: var(--shadow-soft);
+}
+
+.tab-btn {
+    flex: 1;
+    border: none;
+    background: none;
+    font-family: inherit;
+    font-size: 0.9rem;
+    font-weight: 600;
+    padding: 12px 0;
+    border-radius: var(--border-radius-sm);
+    cursor: pointer;
+    color: var(--text-muted);
+    transition: var(--transition-bounce);
+    outline: none;
+}
+
+.tab-btn.active {
+    background-color: var(--primary-terracotta);
+    color: var(--white);
+    box-shadow: 0 4px 12px -2px hsla(14, 85%, 62%, 0.3);
+}
+
+.report-details-container {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    animation: fadeIn 0.4s ease;
+}
+
+.report-header-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: linear-gradient(135deg, hsla(38, 90%, 94%, 0.7) 0%, hsla(14, 90%, 94%, 0.7) 100%);
+    border-color: hsla(14, 90%, 90%, 0.5);
+}
+
+.report-rating-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.report-rating-huge {
+    font-size: 3rem;
+    font-weight: 800;
+    color: var(--primary-terracotta);
+    line-height: 1;
+}
+
+.report-rating-label {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    font-weight: 600;
+}
+
+.report-header-emoji {
+    font-size: 2.8rem;
+}
+
+/* Paylaşılabilir Şık Rapor Kartı (Önizleme) */
+.report-card-preview-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+}
+
+.report-card-preview-title {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 8px;
+}
+
+.report-share-card {
+    background: linear-gradient(135deg, hsl(30, 42%, 97%) 0%, hsl(14, 90%, 95%) 100%);
+    border: 1.5px solid var(--white);
+    border-radius: var(--border-radius-lg);
+    padding: 24px;
+    box-shadow: var(--shadow-cozy);
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    position: relative;
+    text-align: center;
+    overflow: hidden;
+    width: 100%;
+    border-bottom: 4px solid var(--primary-terracotta);
+}
+
+/* Süslemeler */
+.report-share-card::before {
+    content: '';
+    position: absolute;
+    top: -50px;
+    right: -50px;
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    background: radial-gradient(circle, hsla(38, 90%, 85%, 0.4) 0%, transparent 70%);
+}
+
+.report-share-card-header {
+    font-size: 0.75rem;
+    font-weight: 800;
+    color: var(--primary-terracotta);
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+}
+
+.report-share-card-title {
+    font-size: 1.35rem;
+    font-weight: 700;
+    color: var(--text-dark);
+    margin-top: 2px;
+}
+
+.report-share-card-avg {
+    font-size: 3.6rem;
+    font-weight: 800;
+    color: var(--primary-terracotta);
+    margin: 6px 0;
+    line-height: 1;
+    text-shadow: 0 4px 10px hsla(14, 85%, 62%, 0.12);
+}
+
+.report-share-card-emotions {
+    display: flex;
+    justify-content: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin: 2px 0;
+}
+
+.report-share-card-emotions span {
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 4px 10px;
+    background-color: var(--white);
+    border-radius: 12px;
+    box-shadow: var(--shadow-soft);
+    border: 1px solid var(--card-border);
+    color: var(--text-dark);
+}
+
+.report-share-card-quote {
+    font-size: 0.84rem;
+    font-style: italic;
+    color: var(--text-dark);
+    background-color: var(--white);
+    border-radius: var(--border-radius-md);
+    padding: 12px 14px;
+    box-shadow: var(--shadow-soft);
+    border: 1px solid var(--card-border);
+    max-height: 76px;
+    overflow: hidden;
+    line-height: 1.45;
+    margin-top: 4px;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+}
+
+.report-share-card-tagline {
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    margin-top: 6px;
+    letter-spacing: 0.2px;
+}
+
+.report-action-buttons {
+    display: flex;
+    gap: 12px;
+    width: 100%;
+}
+
+.report-action-buttons button {
+    flex: 1;
+}
+
+/* 13.2. PIN Kilidi Ekranı Stilleri */
+.pin-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    padding: 10px 0;
+    width: 100%;
+}
+
+.pin-name-input-group {
+    width: 100%;
+    max-width: 260px;
+    margin-bottom: 24px;
+    text-align: left;
+}
+
+.pin-name-input-group label {
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: var(--text-dark);
+    margin-bottom: 6px;
+    display: block;
+    text-align: center;
+}
+
+.pin-name-input-group input {
+    width: 100%;
+    padding: 14px;
+    border: 1.5px solid var(--card-border);
+    background-color: var(--white);
+    border-radius: var(--border-radius-md);
+    box-shadow: var(--shadow-input);
+    font-family: inherit;
+    font-size: 0.98rem;
+    text-align: center;
+    outline: none;
+    transition: var(--transition-smooth);
+    color: var(--text-dark);
+    font-weight: 600;
+}
+
+.pin-name-input-group input::placeholder {
+    color: hsl(24, 10%, 75%);
+}
+
+.pin-name-input-group input:focus {
+    border-color: var(--primary-terracotta);
+    box-shadow: 0 0 0 4px var(--primary-terracotta-light);
+}
+
+.pin-dots-row {
+    display: flex;
+    gap: 18px;
+    margin: 20px 0 35px 0;
+    justify-content: center;
+}
+
+.pin-dot {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 2px solid var(--text-muted);
+    background-color: transparent;
+    transition: var(--transition-bounce);
+}
+
+.pin-dot.filled {
+    background-color: var(--primary-terracotta);
+    border-color: var(--primary-terracotta);
+    transform: scale(1.2);
+    box-shadow: 0 0 10px hsla(14, 85%, 62%, 0.4);
+}
+
+.pin-keypad {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    width: 100%;
+    max-width: 250px;
+    margin: 0 auto;
+    justify-items: center;
+}
+
+.pin-key {
+    width: 62px;
+    height: 62px;
+    border-radius: 50%;
+    border: 1.5px solid var(--card-border);
+    background-color: var(--white);
+    color: var(--text-dark);
+    font-family: inherit;
+    font-size: 1.45rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: var(--shadow-soft);
+    transition: var(--transition-bounce);
+    outline: none;
+}
+
+.pin-key:hover {
+    transform: scale(1.08);
+    border-color: var(--primary-terracotta-light);
+    background-color: var(--primary-terracotta-light);
+    color: var(--primary-terracotta);
+}
+
+.pin-key:active {
+    transform: scale(0.92);
+}
+
+.pin-key-action {
+    width: 62px;
+    height: 62px;
+    border-radius: 50%;
+    border: none;
+    background-color: transparent;
+    color: var(--text-muted);
+    font-family: inherit;
+    font-size: 1.05rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: var(--transition-smooth);
+    outline: none;
+}
+
+.pin-key-action:hover {
+    background-color: rgba(0, 0, 0, 0.04);
+    color: var(--text-dark);
+}
+
+/* Şifre Hatalı Girildiğinde Sallanma Efekti */
+.pin-dots-row.shake {
+    animation: pinShake 0.4s ease;
+}
+
+@keyframes pinShake {
+    0%, 100% { transform: translateX(0); }
+    20%, 60% { transform: translateX(-8px); }
+    40%, 80% { transform: translateX(8px); }
+}
+
+/* Zen Modu Kulaklık Buton Animasyonu */
+#btn-zen-toggle.active {
+    background-color: var(--primary-terracotta-light);
+    border-color: var(--primary-terracotta);
+    color: var(--primary-terracotta);
+    animation: zenPulse 2s infinite;
+}
+
+@keyframes zenPulse {
+    0% { box-shadow: 0 0 0 0.5px hsla(14, 85%, 62%, 0.3); }
+    70% { box-shadow: 0 0 0 10px hsla(14, 85%, 62%, 0); }
+    100% { box-shadow: 0 0 0 0 hsla(14, 85%, 62%, 0); }
 }
 
 /* 14. Responsive Uyum (Duyarlı Ekran Kuralları) */

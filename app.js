@@ -8,20 +8,24 @@ document.addEventListener('DOMContentLoaded', () => {
     // 1. STATE & STORAGE MANAGEMENT (VERİ KATMANI)
     // ==========================================================================
     const DB = {
-        getUsers: () => JSON.parse(localStorage.getItem('wj_users')) || [],
-        saveUsers: (users) => localStorage.setItem('wj_users', JSON.stringify(users)),
-        
         getEntries: () => JSON.parse(localStorage.getItem('wj_entries')) || [],
         saveEntries: (entries) => localStorage.setItem('wj_entries', JSON.stringify(entries)),
         
-        getActiveUser: () => JSON.parse(localStorage.getItem('wj_active_user')) || null,
-        setActiveUser: (user) => localStorage.setItem('wj_active_user', JSON.stringify(user)),
-        clearActiveUser: () => localStorage.removeItem('wj_active_user')
+        getActiveUser: () => {
+            const pin = localStorage.getItem('wj_pin');
+            if (!pin) return null;
+            return {
+                id: 'wj_local_user',
+                name: localStorage.getItem('wj_user_name') || 'Günlük Dostu',
+                email: 'local@gunce.app'
+            };
+        }
     };
 
     let currentUser = DB.getActiveUser();
     let currentStep = 1; // Günlük yazma adımı (1, 2 veya 3)
     let selectedEmotions = [];
+    let activeReportPeriod = 'weekly'; // Rapor periyodu (weekly, monthly, yearly)
 
     // Sabit Duygu Listesi
     const EMOTIONS_LIST = [
@@ -37,6 +41,17 @@ document.addEventListener('DOMContentLoaded', () => {
         { id: 'Kızgın', emoji: '😠', text: 'Kızgın' }
     ];
 
+    // Günlük İlham Soruları (Mindfulness Prompts)
+    const DAILY_PROMPTS = [
+        "Bugün seni en çok rahatlatan an hangisiydi? 😌", // Pazar (0)
+        "Bugün seni gülümseten en küçük şey neydi? 🌸", // Pazartesi (1)
+        "Bugün kendin hakkında fark ettiğin olumlu bir şey? 🧠", // Salı (2)
+        "Bugün kime, ne için teşekkür etmek istersin? ✨", // Çarşamba (3)
+        "Bugün doğada gördüğün en güzel detay neydi? 🍃", // Perşembe (4)
+        "Bugün başardığın en ufak şey neydi? 🧡", // Cuma (5)
+        "Bugün aldığın en değerli hayat dersi neydi? 🧩" // Cumartesi (6)
+    ];
+
     // ==========================================================================
     // 2. DOM ELEMENTLERİNE ERİŞİM
     // ==========================================================================
@@ -45,7 +60,8 @@ document.addEventListener('DOMContentLoaded', () => {
         auth: document.getElementById('screen-auth'),
         dashboard: document.getElementById('screen-dashboard'),
         write: document.getElementById('screen-write'),
-        profile: document.getElementById('screen-profile')
+        profile: document.getElementById('screen-profile'),
+        reports: document.getElementById('screen-reports')
     };
 
     // Modaller
@@ -55,10 +71,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // Butonlar
     const btnGetStarted = document.getElementById('btn-get-started');
     const btnBackSplash = document.querySelector('.btn-back-splash');
-    const btnSwitchToRegister = document.getElementById('btn-switch-to-register');
-    const btnSwitchToLogin = document.getElementById('btn-switch-to-login');
     const btnProfileTrigger = document.getElementById('btn-profile-trigger');
     const btnCloseProfile = document.getElementById('btn-close-profile');
+    const btnReportsTrigger = document.getElementById('btn-reports-trigger');
+    const btnCloseReports = document.getElementById('btn-close-reports');
     const btnAddEntryTrigger = document.getElementById('btn-add-entry-trigger');
     const btnCancelWrite = document.getElementById('btn-cancel-write');
     const btnNextStep = document.getElementById('btn-next-step');
@@ -69,10 +85,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnCloseModal = document.getElementById('btn-close-modal');
     const btnDeleteEntry = document.getElementById('btn-delete-entry');
     const btnSearchToggle = document.getElementById('btn-search-toggle');
-    
-    // Auth Formları
-    const formLogin = document.getElementById('form-login');
-    const formRegister = document.getElementById('form-register');
+    const btnZenToggle = document.getElementById('btn-zen-toggle');
+    const btnExportPdf = document.getElementById('btn-export-pdf');
     
     // Profil & Ayarlar
     const btnLogout = document.getElementById('btn-logout');
@@ -106,6 +120,19 @@ document.addEventListener('DOMContentLoaded', () => {
     // Listeler ve Grafikler
     const entriesList = document.getElementById('entries-list');
     const moodChartContainer = document.getElementById('mood-chart-container');
+    const reportDetailsContainer = document.getElementById('report-details-container');
+    const reportTabBtns = document.querySelectorAll('.reports-tabs .tab-btn');
+
+    // PIN UI Elemanları
+    const pinKeys = document.querySelectorAll('.pin-key');
+    const btnPinClear = document.getElementById('btn-pin-clear');
+    const btnPinBackspace = document.getElementById('btn-pin-backspace');
+    const pinDotsRow = document.getElementById('pin-dots-row');
+    const pinDots = document.querySelectorAll('.pin-dot');
+    const pinSetupNameGroup = document.getElementById('pin-setup-name-group');
+    const pinSetupNameInput = document.getElementById('pin-setup-name');
+    const pinScreenTitle = document.getElementById('pin-screen-title');
+    const pinScreenDesc = document.getElementById('pin-screen-desc');
 
     // ==========================================================================
     // 3. EKRAN YÖNLENDİRME (ROUTING) SİSTEMİ
@@ -119,6 +146,11 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
         
+        // Zen ses sentezleyiciyi yazma ekranı kapandığında kapat
+        if (screenKey !== 'write') {
+            RainSynthesizer.stop();
+        }
+
         // Dashboard açıldığında verileri güncelle
         if (screenKey === 'dashboard') {
             initDashboard();
@@ -127,171 +159,157 @@ document.addEventListener('DOMContentLoaded', () => {
         if (screenKey === 'profile') {
             initProfile();
         }
+        // Raporlar açıldığında rapor ekranını başlat
+        if (screenKey === 'reports') {
+            initReportsScreen();
+        }
     }
 
     // ==========================================================================
-    // 4. KULLANICI GİRİŞ & KAYIT İŞLEMLERİ (AUTH)
+    // 4. KULLANICI PIN LOCK GİRİŞ & KAYIT İŞLEMLERİ (AUTH)
     // ==========================================================================
-    
-    // Splash'tan Girişe veya Dashboard'a geçiş
+    let enteredPin = "";
+    const PIN_LENGTH = 4;
+
     btnGetStarted.addEventListener('click', () => {
-        if (currentUser) {
-            navigateTo('dashboard');
-        } else {
-            navigateTo('auth');
-            switchAuthView('login');
-        }
+        navigateTo('auth');
+        initAuthScreen();
     });
 
     btnBackSplash.addEventListener('click', () => {
         navigateTo('splash');
     });
 
-    // Giriş/Kayıt Panel Değişimi
-    function switchAuthView(view) {
-        const loginView = document.getElementById('auth-login-view');
-        const registerView = document.getElementById('auth-register-view');
+    function initAuthScreen() {
+        enteredPin = "";
+        updatePinDots();
         
-        if (view === 'login') {
-            loginView.classList.add('active');
-            registerView.classList.remove('active');
-            formLogin.reset();
-            clearErrors(formLogin);
+        const isSetup = !localStorage.getItem('wj_pin');
+        if (isSetup) {
+            pinScreenTitle.textContent = "Şifre Belirle";
+            pinScreenDesc.textContent = "Günlüğünü güvende tutmak için 4 haneli bir şifre seç.";
+            pinSetupNameGroup.style.display = "block";
+            pinSetupNameInput.value = "";
         } else {
-            loginView.classList.remove('active');
-            registerView.classList.add('active');
-            formRegister.reset();
-            clearErrors(formRegister);
+            pinScreenTitle.textContent = "Şifre Girin";
+            pinScreenDesc.textContent = "Günlüğüne erişmek için 4 haneli şifreni gir.";
+            pinSetupNameGroup.style.display = "none";
         }
     }
 
-    btnSwitchToRegister.addEventListener('click', () => switchAuthView('register'));
-    btnSwitchToLogin.addEventListener('click', () => switchAuthView('login'));
+    function updatePinDots() {
+        pinDots.forEach((dot, idx) => {
+            if (idx < enteredPin.length) {
+                dot.classList.add('filled');
+            } else {
+                dot.classList.remove('filled');
+            }
+        });
+    }
 
-    // Form Hata Temizleme
-    function clearErrors(form) {
-        form.querySelectorAll('.form-group').forEach(grp => grp.classList.remove('invalid'));
-        const genErr = form.querySelector('.general-error');
-        if (genErr) {
-            genErr.style.display = 'none';
-            genErr.textContent = '';
+    function handlePinInput(value) {
+        if (enteredPin.length >= PIN_LENGTH) return;
+        
+        enteredPin += value;
+        updatePinDots();
+        
+        if (enteredPin.length === PIN_LENGTH) {
+            setTimeout(verifyPin, 250);
         }
     }
 
-    // Giriş Yapma İşlemi
-    formLogin.addEventListener('submit', (e) => {
-        e.preventDefault();
-        clearErrors(formLogin);
-        
-        const emailInput = document.getElementById('login-email');
-        const passwordInput = document.getElementById('login-password');
-        const generalError = document.getElementById('login-general-error');
-        
-        let isValid = true;
-        
-        if (!validateEmail(emailInput.value)) {
-            emailInput.parentElement.classList.add('invalid');
-            isValid = false;
+    function handlePinBackspace() {
+        if (enteredPin.length > 0) {
+            enteredPin = enteredPin.slice(0, -1);
+            updatePinDots();
         }
-        if (passwordInput.value.trim() === '') {
-            passwordInput.parentElement.classList.add('invalid');
-            isValid = false;
-        }
+    }
+
+    function handlePinClear() {
+        enteredPin = "";
+        updatePinDots();
+    }
+
+    function verifyPin() {
+        const isSetup = !localStorage.getItem('wj_pin');
         
-        if (!isValid) return;
-        
-        const users = DB.getUsers();
-        const foundUser = users.find(u => u.email.toLowerCase() === emailInput.value.toLowerCase().trim() && u.password === passwordInput.value);
-        
-        if (foundUser) {
-            currentUser = { id: foundUser.id, name: foundUser.name, email: foundUser.email };
-            DB.setActiveUser(currentUser);
+        if (isSetup) {
+            const name = pinSetupNameInput.value.trim();
+            if (name.length < 2) {
+                alert("Lütfen önce isminizi girin (en az 2 karakter).");
+                enteredPin = "";
+                updatePinDots();
+                pinSetupNameInput.focus();
+                return;
+            }
+            
+            // PIN ve İsmi yerel olarak kaydet
+            localStorage.setItem('wj_pin', enteredPin);
+            localStorage.setItem('wj_user_name', name);
+            
+            currentUser = {
+                id: 'wj_local_user',
+                name: name,
+                email: 'local@gunce.app'
+            };
+            
             navigateTo('dashboard');
         } else {
-            generalError.textContent = "E-posta veya şifre hatalı. Lütfen tekrar deneyin.";
-            generalError.style.display = 'block';
+            const savedPin = localStorage.getItem('wj_pin');
+            if (enteredPin === savedPin) {
+                const name = localStorage.getItem('wj_user_name') || 'Günlük Dostu';
+                currentUser = {
+                    id: 'wj_local_user',
+                    name: name,
+                    email: 'local@gunce.app'
+                };
+                navigateTo('dashboard');
+            } else {
+                // Şifre yanlış: sallanma animasyonu
+                pinDotsRow.classList.add('shake');
+                enteredPin = "";
+                
+                setTimeout(() => {
+                    pinDotsRow.classList.remove('shake');
+                    updatePinDots();
+                }, 400);
+            }
         }
+    }
+
+    // Keypad Event Listener'larını bağlama
+    pinKeys.forEach(key => {
+        key.addEventListener('click', () => {
+            handlePinInput(key.dataset.value);
+        });
     });
 
-    // Kayıt Olma İşlemi
-    formRegister.addEventListener('submit', (e) => {
-        e.preventDefault();
-        clearErrors(formRegister);
-        
-        const nameInput = document.getElementById('register-name');
-        const emailInput = document.getElementById('register-email');
-        const passwordInput = document.getElementById('register-password');
-        const generalError = document.getElementById('register-general-error');
-        
-        let isValid = true;
-        
-        if (nameInput.value.trim().length < 2) {
-            nameInput.parentElement.classList.add('invalid');
-            isValid = false;
-        }
-        if (!validateEmail(emailInput.value)) {
-            emailInput.parentElement.classList.add('invalid');
-            isValid = false;
-        }
-        if (passwordInput.value.length < 6) {
-            passwordInput.parentElement.classList.add('invalid');
-            isValid = false;
-        }
-        
-        if (!isValid) return;
-        
-        const users = DB.getUsers();
-        const emailExists = users.some(u => u.email.toLowerCase() === emailInput.value.toLowerCase().trim());
-        
-        if (emailExists) {
-            generalError.textContent = "Bu e-posta adresi zaten kullanımda.";
-            generalError.style.display = 'block';
-            return;
-        }
-        
-        // Yeni Kullanıcı Oluştur
-        const newUser = {
-            id: 'u_' + Date.now(),
-            name: nameInput.value.trim(),
-            email: emailInput.value.toLowerCase().trim(),
-            password: passwordInput.value
-        };
-        
-        users.push(newUser);
-        DB.saveUsers(users);
-        
-        // Oturum aç ve yönlendir
-        currentUser = { id: newUser.id, name: newUser.name, email: newUser.email };
-        DB.setActiveUser(currentUser);
-        navigateTo('dashboard');
-    });
+    if (btnPinClear) {
+        btnPinClear.addEventListener('click', handlePinClear);
+    }
 
-    function validateEmail(email) {
-        return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+    if (btnPinBackspace) {
+        btnPinBackspace.addEventListener('click', handlePinBackspace);
     }
 
     // ==========================================================================
-    // 5. ANA PANEL (DASHBOARD) YÖNETİMİ
+    // 5. ANA PANEL (DASHBOARD) VE COZY DİNAMİK TEMA YÖNETİMİ
     // ==========================================================================
     
     function initDashboard() {
         if (!currentUser) return;
         
-        // Başlıkta karşılama metni ve tarih
         document.getElementById('dashboard-greeting').textContent = `Merhaba, ${currentUser.name}! 🌸`;
         document.getElementById('dashboard-date').textContent = getFormattedTodayDate();
         
-        // Avatar harfi
         const avatarEl = document.getElementById('user-avatar');
         avatarEl.textContent = currentUser.name.charAt(0).toUpperCase();
         
-        // Arama/filtreyi sıfırla
         searchBar.classList.remove('active');
         searchInput.value = '';
         filterRating.value = 'all';
         filterEmotion.value = 'all';
         
-        // Günlükleri listele ve grafikleri çiz
         renderEntries();
     }
 
@@ -300,11 +318,45 @@ document.addEventListener('DOMContentLoaded', () => {
         return new Date().toLocaleDateString('tr-TR', options);
     }
 
+    // Haftalık Ortalama Ruh Haline Göre Dinamik HSL Teması
+    function updateThemeColors(avgRating) {
+        if (avgRating >= 7.5) {
+            // Mutlu/Pozitif: Cozy Gün Batımı Şeftalisi ve Terracotta teması
+            document.documentElement.style.setProperty('--bg-cozy-cream', 'hsl(30, 42%, 97%)');
+            document.documentElement.style.setProperty('--bg-phone-screen', 'hsl(30, 50%, 99%)');
+            document.documentElement.style.setProperty('--primary-terracotta', 'hsl(14, 85%, 62%)');
+            document.documentElement.style.setProperty('--primary-terracotta-dark', 'hsl(14, 75%, 52%)');
+            document.documentElement.style.setProperty('--primary-terracotta-light', 'hsl(14, 90%, 94%)');
+            document.documentElement.style.setProperty('--accent-sunset-gold', 'hsl(38, 90%, 58%)');
+            document.documentElement.style.setProperty('--accent-sunset-gold-light', 'hsl(38, 90%, 93%)');
+            document.documentElement.style.setProperty('--accent-warm-peach', 'hsl(24, 90%, 75%)');
+        } else if (avgRating >= 5.0) {
+            // Dengeli/Sakin: Rahatlatıcı Adaçayı Yeşili teması
+            document.documentElement.style.setProperty('--bg-cozy-cream', 'hsl(120, 20%, 97%)');
+            document.documentElement.style.setProperty('--bg-phone-screen', 'hsl(120, 25%, 99%)');
+            document.documentElement.style.setProperty('--primary-terracotta', 'hsl(150, 40%, 45%)');
+            document.documentElement.style.setProperty('--primary-terracotta-dark', 'hsl(150, 40%, 35%)');
+            document.documentElement.style.setProperty('--primary-terracotta-light', 'hsl(150, 30%, 93%)');
+            document.documentElement.style.setProperty('--accent-sunset-gold', 'hsl(180, 30%, 50%)');
+            document.documentElement.style.setProperty('--accent-sunset-gold-light', 'hsl(180, 30%, 93%)');
+            document.documentElement.style.setProperty('--accent-warm-peach', 'hsl(165, 45%, 70%)');
+        } else {
+            // Düşük/Zor Dönem: Şefkatli, Yumuşak Kakao / Sıcak Gri-Toprak teması
+            document.documentElement.style.setProperty('--bg-cozy-cream', 'hsl(20, 20%, 96%)');
+            document.documentElement.style.setProperty('--bg-phone-screen', 'hsl(20, 25%, 98%)');
+            document.documentElement.style.setProperty('--primary-terracotta', 'hsl(20, 30%, 48%)');
+            document.documentElement.style.setProperty('--primary-terracotta-dark', 'hsl(20, 30%, 38%)');
+            document.documentElement.style.setProperty('--primary-terracotta-light', 'hsl(20, 20%, 92%)');
+            document.documentElement.style.setProperty('--accent-sunset-gold', 'hsl(30, 20%, 55%)');
+            document.documentElement.style.setProperty('--accent-sunset-gold-light', 'hsl(30, 20%, 92%)');
+            document.documentElement.style.setProperty('--accent-warm-peach', 'hsl(25, 25%, 75%)');
+        }
+    }
+
     // ==========================================================================
     // 6. GÜNLÜK YAZMA VE İNTERAKTİF PUANLAMA (SLIDER, EMOJI & DUYGULAR)
     // ==========================================================================
     
-    // Duygu Seçim Izgarasını Çizme
     function initEmotionsGrid() {
         emotionsSelectionGrid.innerHTML = '';
         selectedEmotions = [];
@@ -328,12 +380,15 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Günlük Girişi Başlatma
     btnAddEntryTrigger.addEventListener('click', () => {
         currentStep = 1;
         entrySummaryInput.value = '';
         charCounter.textContent = '0 / 500';
         minCharWarning.classList.remove('active');
+        
+        // Günün felsefi mindfulness sorusunu placeholder olarak enjekte et
+        const dayIndex = new Date().getDay();
+        entrySummaryInput.placeholder = DAILY_PROMPTS[dayIndex];
         
         entryRatingInput.value = 7;
         updateRatingUI(7);
@@ -347,7 +402,6 @@ document.addEventListener('DOMContentLoaded', () => {
         navigateTo('dashboard');
     });
 
-    // Karakter Sayacı
     entrySummaryInput.addEventListener('input', () => {
         const len = entrySummaryInput.value.length;
         charCounter.textContent = `${len} / 500`;
@@ -357,7 +411,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Navigasyon: 1. Adımdan 2. Adıma
     btnNextStep.addEventListener('click', () => {
         const text = entrySummaryInput.value.trim();
         if (text.length < 5) {
@@ -374,7 +427,6 @@ document.addEventListener('DOMContentLoaded', () => {
         showWriteStep(1);
     });
 
-    // Navigasyon: 2. Adımdan 3. Adıma
     btnNextStep3.addEventListener('click', () => {
         currentStep = 3;
         showWriteStep(3);
@@ -385,7 +437,6 @@ document.addEventListener('DOMContentLoaded', () => {
         showWriteStep(2);
     });
 
-    // Aşamalı Görünüm Yönetimi
     function showWriteStep(step) {
         document.getElementById('current-step-dot').textContent = step;
         
@@ -406,18 +457,16 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // İnteraktif Puan Değişimi
     entryRatingInput.addEventListener('input', (e) => {
         const rating = parseInt(e.target.value);
         updateRatingUI(rating);
     });
 
-    // Emoji ve Puanlama UI Güncellemesi
     function updateRatingUI(rating) {
         ratingNumber.textContent = rating;
         
         ratingEmoji.classList.remove('pop');
-        void ratingEmoji.offsetWidth; // DOM tetikleme
+        void ratingEmoji.offsetWidth;
         ratingEmoji.classList.add('pop');
         
         let emoji = '🙂';
@@ -447,7 +496,6 @@ document.addEventListener('DOMContentLoaded', () => {
         ratingNumber.style.color = themeColor;
     }
 
-    // Günlüğü Kaydetme
     btnSaveEntry.addEventListener('click', () => {
         const summaryText = entrySummaryInput.value.trim();
         const rating = parseInt(entryRatingInput.value);
@@ -461,7 +509,7 @@ document.addEventListener('DOMContentLoaded', () => {
             dateStr: getFormattedDate(new Date()),
             text: summaryText,
             rating: rating,
-            emotions: [...selectedEmotions], // Seçilen duyguları kaydet
+            emotions: [...selectedEmotions],
             timestamp: Date.now()
         };
         
@@ -478,10 +526,310 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ==========================================================================
-    // 7. GÜNLÜK LİSTELEME, ARAMA VE FİLTRELEME
+    // 7. AMBİYANS: ÇEVRİMDIŞI SENTEZLENEN ZEN YAĞMUR MOTORU (AUDIO CONTEXT)
+    // ==========================================================================
+    const RainSynthesizer = {
+        audioCtx: null,
+        noiseSource: null,
+        gainNode: null,
+        lowpassFilter: null,
+        isActive: false,
+
+        init: function() {
+            const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+            if (!AudioContextClass) {
+                console.error("Web Audio API not supported on this browser.");
+                return false;
+            }
+            this.audioCtx = new AudioContextClass();
+            return true;
+        },
+
+        start: function() {
+            if (!this.audioCtx && !this.init()) return;
+
+            // Tarayıcı güvenlik kuralları gereği ses bağlamını etkinleştir
+            if (this.audioCtx.state === 'suspended') {
+                this.audioCtx.resume();
+            }
+
+            const sampleRate = this.audioCtx.sampleRate;
+            const bufferSize = 2 * sampleRate;
+            const noiseBuffer = this.audioCtx.createBuffer(1, bufferSize, sampleRate);
+            const output = noiseBuffer.getChannelData(0);
+            
+            // Beyaz Gürültü (White Noise) üret
+            for (let i = 0; i < bufferSize; i++) {
+                output[i] = Math.random() * 2 - 1;
+            }
+
+            this.noiseSource = this.audioCtx.createBufferSource();
+            this.noiseSource.buffer = noiseBuffer;
+            this.noiseSource.loop = true;
+
+            // Cozy dinlendirici yağmur gürlemesi için Lowpass Filtre
+            this.lowpassFilter = this.audioCtx.createBiquadFilter();
+            this.lowpassFilter.type = 'lowpass';
+            this.lowpassFilter.frequency.setValueAtTime(450, this.audioCtx.currentTime);
+
+            // Pop/patlama sesini engellemek için yumuşak ses geçiş kazancı
+            this.gainNode = this.audioCtx.createGain();
+            this.gainNode.gain.setValueAtTime(0, this.audioCtx.currentTime);
+
+            // Filtreleri birbirine bağla: Gürültü -> Düşük Geçiren Filtre -> Ses Düzeyi -> Hoparlör
+            this.noiseSource.connect(this.lowpassFilter);
+            this.lowpassFilter.connect(this.gainNode);
+            this.gainNode.connect(this.audioCtx.destination);
+
+            this.noiseSource.start(0);
+            
+            // 1.5 saniye içinde sesi yumuşakça yükselt
+            this.gainNode.gain.linearRampToValueAtTime(0.12, this.audioCtx.currentTime + 1.5);
+            this.isActive = true;
+        },
+
+        stop: function() {
+            if (!this.isActive) return;
+
+            // 1.0 saniye içinde sesi yumuşakça sönümlendir
+            if (this.gainNode) {
+                this.gainNode.gain.setValueAtTime(this.gainNode.gain.value, this.audioCtx.currentTime);
+                this.gainNode.gain.linearRampToValueAtTime(0, this.audioCtx.currentTime + 1.0);
+            }
+
+            const activeSource = this.noiseSource;
+            setTimeout(() => {
+                try {
+                    if (activeSource) activeSource.stop();
+                } catch(e) {
+                    // Zaten durdurulmuş olabilir
+                }
+            }, 1100);
+
+            this.isActive = false;
+        },
+
+        toggle: function() {
+            if (this.isActive) {
+                this.stop();
+                btnZenToggle.classList.remove('active');
+            } else {
+                this.start();
+                btnZenToggle.classList.add('active');
+            }
+        }
+    };
+
+    if (btnZenToggle) {
+        btnZenToggle.addEventListener('click', () => {
+            RainSynthesizer.toggle();
+        });
+    }
+
+    // ==========================================================================
+    // 8. DİKEY ŞİİRSEL GÜNLÜK KİTABI PDF PROJEKTÖRÜ (PRINT ENGINE)
+    // ==========================================================================
+    function exportDiaryToPDF() {
+        const allEntries = DB.getEntries();
+        const userEntries = allEntries
+            .filter(e => e.userId === currentUser.id)
+            .sort((a, b) => a.timestamp - b.timestamp); // Kronolojik sıralama
+            
+        if (userEntries.length === 0) {
+            alert("Kitaplaştırmak için henüz hiçbir günlük kaydı oluşturmamışsınız. Birkaç gün yazdıktan sonra tekrar deneyin! 📚");
+            return;
+        }
+
+        const printWindow = window.open('', '_blank');
+        if (!printWindow) {
+            alert("Tarayıcınızın pop-up engelleyicisi yeni pencere açılmasını engelledi. Lütfen izin verip tekrar deneyin.");
+            return;
+        }
+
+        let entriesHtml = "";
+        userEntries.forEach(entry => {
+            let emotionsHtml = "";
+            if (entry.emotions && entry.emotions.length > 0) {
+                emotionsHtml = `<div class="emotions-row">` + 
+                    entry.emotions.map(emoId => {
+                        const emo = EMOTIONS_LIST.find(e => e.id === emoId);
+                        return emo ? `<span class="emotion-tag">${emo.emoji} ${emo.text}</span>` : '';
+                    }).join('') + `</div>`;
+            }
+            
+            let emoji = '🙂';
+            if (entry.rating <= 4) emoji = entry.rating <= 2 ? '🥺' : '😕';
+            else if (entry.rating >= 8) emoji = entry.rating >= 9 ? '🥰' : '😊';
+
+            entriesHtml += `
+                <div class="diary-page">
+                    <div class="page-header">
+                        <span class="page-date">${entry.dateStr}</span>
+                        <span class="page-rating">${emoji} Puan: ${entry.rating}/10</span>
+                    </div>
+                    <div class="poetry-separator">✦ ✦ ✦</div>
+                    <div class="poetry-content">${entry.text.replace(/\n/g, '<br>')}</div>
+                    ${emotionsHtml}
+                </div>
+            `;
+        });
+
+        const printHtml = `
+            <!DOCTYPE html>
+            <html lang="tr">
+            <head>
+                <meta charset="UTF-8">
+                <title>${currentUser.name} - Günlük Kitabım</title>
+                <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&family=Playfair+Display:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+                <style>
+                    body {
+                        font-family: 'Outfit', sans-serif;
+                        background-color: #faf7f2;
+                        color: #2b2523;
+                        margin: 0;
+                        padding: 40px;
+                        line-height: 1.7;
+                    }
+                    .book-cover {
+                        height: 100vh;
+                        display: flex;
+                        flex-direction: column;
+                        justify-content: center;
+                        align-items: center;
+                        text-align: center;
+                        page-break-after: always;
+                    }
+                    .cover-title {
+                        font-family: 'Playfair Display', serif;
+                        font-size: 3.8rem;
+                        font-weight: 700;
+                        color: #f27d52;
+                        margin-bottom: 10px;
+                    }
+                    .cover-subtitle {
+                        font-size: 1.1rem;
+                        color: #8c7672;
+                        letter-spacing: 2px;
+                        text-transform: uppercase;
+                        margin-bottom: 60px;
+                    }
+                    .cover-author {
+                        font-size: 1.6rem;
+                        font-family: 'Playfair Display', serif;
+                        font-style: italic;
+                        color: #2b2523;
+                        margin-bottom: 20px;
+                    }
+                    .cover-date {
+                        font-size: 0.95rem;
+                        color: #a08c88;
+                    }
+                    .diary-page {
+                        padding: 60px 40px;
+                        max-width: 650px;
+                        margin: 0 auto;
+                        page-break-after: always;
+                        display: flex;
+                        flex-direction: column;
+                        min-height: 80vh;
+                        justify-content: center;
+                    }
+                    .diary-page:last-child {
+                        page-break-after: avoid;
+                    }
+                    .page-header {
+                        display: flex;
+                        justify-content: space-between;
+                        border-bottom: 1px solid #eee1d5;
+                        padding-bottom: 12px;
+                        margin-bottom: 45px;
+                        font-size: 0.85rem;
+                        font-weight: 600;
+                        color: #8c7672;
+                        text-transform: uppercase;
+                        letter-spacing: 1px;
+                    }
+                    .poetry-separator {
+                        text-align: center;
+                        color: #f27d52;
+                        font-size: 1rem;
+                        margin-bottom: 45px;
+                        letter-spacing: 6px;
+                        opacity: 0.8;
+                    }
+                    .poetry-content {
+                        font-family: 'Playfair Display', serif;
+                        font-size: 1.38rem;
+                        line-height: 1.9;
+                        color: #3b3230;
+                        text-align: justify;
+                        margin-bottom: 45px;
+                        white-space: pre-wrap;
+                        padding: 0 10px;
+                    }
+                    .emotions-row {
+                        display: flex;
+                        flex-wrap: wrap;
+                        gap: 8px;
+                        justify-content: center;
+                        margin-top: auto;
+                        padding-top: 40px;
+                    }
+                    .emotion-tag {
+                        font-size: 0.8rem;
+                        font-weight: 600;
+                        padding: 6px 14px;
+                        border-radius: 20px;
+                        background-color: #f3ede4;
+                        color: #554440;
+                        border: 1px solid #e7ded2;
+                    }
+                    @media print {
+                        body {
+                            background-color: #ffffff;
+                            padding: 0;
+                        }
+                        .diary-page {
+                            padding: 40px 20px;
+                            min-height: 90vh;
+                        }
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="book-cover">
+                    <div style="flex-grow: 1;"></div>
+                    <h1 class="cover-title">Günce</h1>
+                    <div class="cover-subtitle">Zihnimi Dinlendiriyorum</div>
+                    <div style="width: 60px; height: 1.5px; background-color: #f27d52; margin: 30px auto;"></div>
+                    <div class="cover-author">${currentUser.name}</div>
+                    <div class="cover-date">${new Date().toLocaleDateString('tr-TR', { year: 'numeric', month: 'long' })}</div>
+                    <div style="flex-grow: 1.5;"></div>
+                    <div style="font-size: 0.8rem; color: #a08c88;">Bu eser yerel olarak saklanan günlük anılardan şiirsel formatta üretilmiştir.</div>
+                </div>
+                ${entriesHtml}
+                <script>
+                    window.onload = function() {
+                        window.print();
+                    };
+                </script>
+            </body>
+            </html>
+        `;
+
+        printWindow.document.open();
+        printWindow.document.write(printHtml);
+        printWindow.document.close();
+    }
+
+    if (btnExportPdf) {
+        btnExportPdf.addEventListener('click', exportDiaryToPDF);
+    }
+
+    // ==========================================================================
+    // 9. GÜNLÜK LİSTELEME, ARAMA VE FİLTRELEME
     // ==========================================================================
     
-    // Arama Çubuğu Aç/Kapat
     btnSearchToggle.addEventListener('click', () => {
         searchBar.classList.toggle('active');
         if (searchBar.classList.contains('active')) {
@@ -498,7 +846,6 @@ document.addEventListener('DOMContentLoaded', () => {
     filterRating.addEventListener('change', renderEntries);
     filterEmotion.addEventListener('change', renderEntries);
 
-    // Günlükleri Ekrana Çizme
     function renderEntries() {
         entriesList.innerHTML = '';
         
@@ -527,10 +874,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return matchesSearch && matchesRating && matchesEmotion;
         });
         
-        // İstatistikleri Güncelle
         updateStats(userEntries);
-        
-        // Grafiği Oluştur (Son 7 gün)
         renderMoodChart(userEntries);
         
         if (filteredEntries.length === 0) {
@@ -543,7 +887,6 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         
-        // Kartları DOM'a ekle
         filteredEntries.forEach(entry => {
             const card = document.createElement('article');
             card.className = 'entry-card';
@@ -560,7 +903,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 colorClass = 'rating-good';
             }
             
-            // Duygu etiketlerini oluştur (küçük pastel pill'ler)
             let emotionsHtml = '';
             if (entry.emotions && entry.emotions.length > 0) {
                 emotionsHtml = `<div class="entry-emotions-row">` + 
@@ -597,7 +939,6 @@ document.addEventListener('DOMContentLoaded', () => {
             .replace(/'/g, '&#039;');
     }
 
-    // İstatistik Hesaplama
     function updateStats(userEntries) {
         const totalEl = document.getElementById('stats-total-entries');
         const streakEl = document.getElementById('stats-streak');
@@ -608,6 +949,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (userEntries.length === 0) {
             streakEl.textContent = '0 Gün';
             avgEl.textContent = 'Ort: -';
+            updateThemeColors(8.0); // Veri yokken şeftali renk teması varsayılandır
             return;
         }
         
@@ -615,6 +957,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const sum = recent7.reduce((acc, curr) => acc + curr.rating, 0);
         const avg = (sum / recent7.length).toFixed(1);
         avgEl.textContent = `Ort: ${avg}`;
+        
+        // Haftalık ruh hali ortalamasına göre uygulamanın renk tonunu anında değiştir
+        updateThemeColors(parseFloat(avg));
         
         streakEl.textContent = `${calculateStreak(userEntries)} Gün`;
     }
@@ -657,7 +1002,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ==========================================================================
-    // 8. DİNAMİK MİNİMALİST SVG HAFTALIK DUYGU GRAFİĞİ
+    // 10. DİNAMİK MİNİMALİST SVG HAFTALIK DUYGU GRAFİĞİ
     // ==========================================================================
     
     function renderMoodChart(userEntries) {
@@ -729,11 +1074,11 @@ document.addEventListener('DOMContentLoaded', () => {
             <svg class="mood-chart-svg" viewBox="0 0 ${width} ${height}">
                 <defs>
                     <linearGradient id="chart-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                        <stop offset="0%" stop-color="#f27d52" />
-                        <stop offset="100%" stop-color="#f9b26c" />
+                        <stop offset="0%" stop-color="var(--primary-terracotta)" />
+                        <stop offset="100%" stop-color="var(--accent-sunset-gold)" />
                     </linearGradient>
                     <linearGradient id="chart-area-gradient" x1="0%" y1="0%" x2="0%" y2="100%">
-                        <stop offset="0%" stop-color="#f27d52" />
+                        <stop offset="0%" stop-color="var(--primary-terracotta)" />
                         <stop offset="100%" stop-color="#ffffff" />
                     </linearGradient>
                 </defs>
@@ -749,7 +1094,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ==========================================================================
-    // 9. DİNAMİK DETAY MODALI (POPUP / BOTTOM SHEET)
+    // 11. DİNAMİK DETAY MODALI (POPUP / BOTTOM SHEET)
     // ==========================================================================
     
     let activeDetailEntry = null;
@@ -785,7 +1130,6 @@ document.addEventListener('DOMContentLoaded', () => {
         labelEl.textContent = text;
         moodCardEl.className = `modal-mood-badge-card ${colorClass}`;
         
-        // Modal Detay Duygu Etiketleri Yükleme
         const modalEmotionsSection = document.getElementById('modal-emotions-section');
         const modalEmotionsList = document.getElementById('modal-emotions-list');
         modalEmotionsList.innerHTML = '';
@@ -831,7 +1175,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // ==========================================================================
-    // 10. PROFİL, AYARLAR VE VERİ YEDEKLEME / GERİ YÜKLEME
+    // 12. PROFİL, AYARLAR VE VERİ YEDEKLEME / GERİ YÜKLEME
     // ==========================================================================
     
     btnProfileTrigger.addEventListener('click', () => {
@@ -846,43 +1190,35 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!currentUser) return;
         
         document.getElementById('profile-name').textContent = currentUser.name;
-        document.getElementById('profile-email').textContent = currentUser.email;
         document.getElementById('profile-avatar-large').textContent = currentUser.name.charAt(0).toUpperCase();
         
         backupFeedbackMsg.style.display = 'none';
         backupFeedbackMsg.className = 'backup-feedback';
 
-        // Profil her açıldığında bildirim izin durumunu kontrol et
         checkNotificationStatus();
     }
 
     btnLogout.addEventListener('click', () => {
-        const confirmLogout = confirm("Oturumu kapatmak istediğinden emin misin?");
+        const confirmLogout = confirm("Uygulamayı kilitlemek istediğinizden emin misiniz?");
         if (!confirmLogout) return;
         
         currentUser = null;
-        DB.clearActiveUser();
         navigateTo('splash');
     });
 
     btnDeleteAccount.addEventListener('click', () => {
-        const doubleConfirm = confirm("DİKKAT! Bu işlem bu cihazdaki tüm günlüklerinizi ve hesabınızı KALICI olarak silecektir. Geri alınamaz. Devam etmek istiyor musunuz?");
+        const doubleConfirm = confirm("DİKKAT! Bu işlem bu cihazdaki tüm günlüklerinizi ve şifrenizi KALICI olarak silecektir. Bu işlem geri alınamaz. Devam etmek istiyor musunuz?");
         if (!doubleConfirm) return;
         
-        const users = DB.getUsers();
-        const updatedUsers = users.filter(u => u.id !== currentUser.id);
-        DB.saveUsers(updatedUsers);
-        
-        const entries = DB.getEntries();
-        const updatedEntries = entries.filter(e => e.userId !== currentUser.id);
-        DB.saveEntries(updatedEntries);
+        // Tüm yerel verileri sıfırla
+        localStorage.removeItem('wj_pin');
+        localStorage.removeItem('wj_user_name');
+        localStorage.removeItem('wj_entries');
         
         currentUser = null;
-        DB.clearActiveUser();
         navigateTo('splash');
     });
 
-    // --- VERİ YEDEKLEME (JSON İNDİR) ---
     btnBackupExport.addEventListener('click', () => {
         const allEntries = DB.getEntries();
         const userEntries = allEntries.filter(e => e.userId === currentUser.id);
@@ -913,7 +1249,6 @@ document.addEventListener('DOMContentLoaded', () => {
         showBackupFeedback("Verileriniz başarıyla yedeklendi ve dosya indirildi! 📥", "success");
     });
 
-    // --- YEDEĞİ GERİ YÜKLEME (JSON YÜKLE) ---
     fileBackupImport.addEventListener('change', (e) => {
         const file = e.target.files[0];
         if (!file) return;
@@ -965,7 +1300,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ==========================================================================
-    // ONESIGNAL BİLDİRİM YÖNETİMİ
+    // 13. ONESIGNAL BİLDİRİM YÖNETİMİ
     // ==========================================================================
     window.OneSignal = window.OneSignal || [];
     let isOneSignalSupported = false;
@@ -974,14 +1309,13 @@ document.addEventListener('DOMContentLoaded', () => {
         isOneSignalSupported = OneSignal.isPushNotificationsSupported();
         
         OneSignal.init({
-            appId: "f75ca1f4-34ec-4913-bccc-e655e9be27a3", // Kullanıcı ücretsiz OneSignal App ID'sini buraya yapıştıracak
+            appId: "c223c680-e88b-4a5f-afc5-674b0fa03ea4", // OneSignal App ID
             safari_web_id: "web.onesignal.auto.16e01a18-5a21-4ea6-81cf-50854d588523",
             notifyButton: {
-                enable: false, // Hazır zili devre dışı bıraktık
+                enable: false,
             },
         });
         
-        // İzin durumu değiştiğinde UI'ı güncelle
         OneSignal.on('notificationPermissionChange', function(permissionChange) {
             updateNotificationButtonUI(permissionChange.to);
         });
@@ -1021,7 +1355,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 updateNotificationButtonUI(permission);
             });
         } else {
-            // SDK yüklenmediyse tarayıcı varsayılan izin durumunu kontrol et
             if ('Notification' in window) {
                 updateNotificationButtonUI(Notification.permission);
             } else {
@@ -1030,7 +1363,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // Bildirim Buton Tıklama Aksiyonu
     if (btnToggleNotifications) {
         btnToggleNotifications.addEventListener('click', () => {
             if (!isOneSignalSupported) return;
@@ -1038,7 +1370,6 @@ document.addEventListener('DOMContentLoaded', () => {
             if (window.OneSignal) {
                 OneSignal.getNotificationPermission(function(permission) {
                     if (permission === 'default') {
-                        // Tarayıcı izin arayüzünü tetikle
                         OneSignal.showNativePrompt();
                     } else if (permission === 'denied') {
                         alert("Bildirim izinlerini tarayıcınızın adres çubuğundaki kilit ikonuna tıklayarak tekrar etkinleştirebilirsiniz.");
@@ -1051,10 +1382,454 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ==========================================================================
-    // 11. BAŞLANGIÇ OTURUM KONTROLÜ
+    // 14. GELİŞMİŞ DÖNEMSEL RAPORLAMA VE GÖRSEL PAYLAŞIM KATMANI
     // ==========================================================================
-    if (currentUser) {
+    
+    btnReportsTrigger.addEventListener('click', () => {
+        navigateTo('reports');
+    });
+
+    btnCloseReports.addEventListener('click', () => {
         navigateTo('dashboard');
+    });
+
+    // Sekmeler Arası Geçiş Dinamiği
+    reportTabBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            reportTabBtns.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            activeReportPeriod = btn.dataset.period;
+            generateReportDetails();
+        });
+    });
+
+    function initReportsScreen() {
+        activeReportPeriod = 'weekly';
+        reportTabBtns.forEach(b => {
+            if (b.dataset.period === 'weekly') b.classList.add('active');
+            else b.classList.remove('active');
+        });
+        generateReportDetails();
+    }
+
+    let currentCalculatedReport = null; // Canvas'ta çizilecek aktif verileri tutar
+
+    function generateReportDetails() {
+        reportDetailsContainer.innerHTML = '';
+        currentCalculatedReport = null;
+        
+        const allEntries = DB.getEntries();
+        const userEntries = allEntries.filter(e => e.userId === currentUser.id);
+        
+        if (userEntries.length === 0) {
+            renderEmptyReportsView();
+            return;
+        }
+        
+        let filtered = [];
+        let periodLabel = 'Haftalık';
+        
+        const now = Date.now();
+        if (activeReportPeriod === 'weekly') {
+            // Son 7 günün verisi
+            const limit = now - 7 * 24 * 60 * 60 * 1000;
+            filtered = userEntries.filter(e => e.timestamp >= limit);
+            periodLabel = 'Haftalık';
+        } else if (activeReportPeriod === 'monthly') {
+            // Son 30 günün verisi
+            const limit = now - 30 * 24 * 60 * 60 * 1000;
+            filtered = userEntries.filter(e => e.timestamp >= limit);
+            periodLabel = 'Aylık';
+        } else {
+            // Son 365 günün verisi
+            const limit = now - 365 * 24 * 60 * 60 * 1000;
+            filtered = userEntries.filter(e => e.timestamp >= limit);
+            periodLabel = 'Yıllık';
+        }
+        
+        if (filtered.length === 0) {
+            renderEmptyPeriodView(periodLabel);
+            return;
+        }
+        
+        // 1. Ortalama Puan Hesaplama
+        const sum = filtered.reduce((acc, curr) => acc + curr.rating, 0);
+        const avg = (sum / filtered.length).toFixed(1);
+        
+        // 2. En Sık Tercih Edilen Duyguları Hesaplama
+        const emotionCounts = {};
+        filtered.forEach(entry => {
+            if (entry.emotions) {
+                entry.emotions.forEach(emo => {
+                    emotionCounts[emo] = (emotionCounts[emo] || 0) + 1;
+                });
+            }
+        });
+        const sortedEmotions = Object.keys(emotionCounts).sort((a, b) => emotionCounts[b] - emotionCounts[a]);
+        const topEmotions = sortedEmotions.slice(0, 3).map(emoId => {
+            return EMOTIONS_LIST.find(e => e.id === emoId);
+        }).filter(Boolean);
+        
+        // 3. Peak (Zirve) & Valley (En Zor) Gün
+        const sortedByRating = [...filtered].sort((a, b) => b.rating - a.rating);
+        const peakDay = sortedByRating[0];
+        const valleyDay = sortedByRating[sortedByRating.length - 1];
+        
+        // Aktif Rapor Durumunu State'e kaydet (Canvas için)
+        currentCalculatedReport = {
+            userName: currentUser.name,
+            period: periodLabel,
+            avgRating: avg,
+            emotions: topEmotions,
+            peakText: peakDay.text,
+            peakDate: peakDay.dateStr
+        };
+        
+        // UI Render Etme
+        let emotionsHtml = '';
+        if (topEmotions.length > 0) {
+            emotionsHtml = topEmotions.map(emo => {
+                return `<span>${emo.emoji} ${emo.text}</span>`;
+            }).join('');
+        } else {
+            emotionsHtml = `<span style="font-size:0.8rem; color:var(--text-muted)">Henüz duygu girilmemiş.</span>`;
+        }
+        
+        reportDetailsContainer.innerHTML = `
+            <!-- Rapor Özet Kartı -->
+            <div class="glass-card report-header-card animate-float">
+                <div class="report-rating-wrapper">
+                    <span class="report-rating-huge">${avg}</span>
+                    <span class="report-rating-label">Ortalama Duygu Puanın</span>
+                </div>
+                <div class="report-header-emoji">${avg >= 8 ? '🥰' : (avg >= 5 ? '😊' : '🥺')}</div>
+            </div>
+            
+            <!-- Paylaşılabilir Şık Kart Önizlemesi -->
+            <div class="report-card-preview-wrapper">
+                <span class="report-card-preview-title">Kart Önizlemesi</span>
+                <div class="report-share-card" id="dom-report-card">
+                    <div class="report-share-card-header">${periodLabel} GÜNCE ÖZETİ</div>
+                    <div class="report-share-card-title">${currentUser.name}'in Ruh Hali</div>
+                    <div class="report-share-card-avg">${avg} <span style="font-size: 1.5rem; font-weight: 500">/ 10</span></div>
+                    <div class="report-share-card-emotions">
+                        ${emotionsHtml}
+                    </div>
+                    <div class="report-share-card-quote">
+                        "${escapeHTML(peakDay.text)}"
+                    </div>
+                    <div class="report-share-card-tagline">🌸 gunce.app • zihnimi dinlendiriyorum</div>
+                </div>
+            </div>
+            
+            <!-- Paylaşım & İndirme Butonları -->
+            <div class="report-action-buttons">
+                <button type="button" id="btn-share-report" class="btn btn-secondary">
+                    <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" style="margin-right:2px"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg>
+                    Paylaş
+                </button>
+                <button type="button" id="btn-download-report" class="btn btn-primary">
+                    <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" style="margin-right:2px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                    Kartı İndir
+                </button>
+            </div>
+            
+            <!-- Ek Detay Kartı (Peak & Valley) -->
+            <div class="glass-card" style="display:flex; flex-direction:column; gap:14px; text-align:left">
+                <h4 style="font-size:0.95rem; font-weight:700; color:var(--text-dark)">Zirveler ve Vadiler</h4>
+                
+                <div style="display:flex; gap:10px; flex-direction:column">
+                    <div style="background-color:var(--white); border:1px solid var(--card-border); padding:12px; border-radius:var(--border-radius-md)">
+                        <div style="display:flex; justify-content:space-between; margin-bottom:4px">
+                            <span style="font-size:0.8rem; font-weight:700; color:var(--primary-terracotta)">📈 EN İYİ ANIN</span>
+                            <span style="font-size:0.75rem; font-weight:700; color:var(--text-muted)">${peakDay.dateStr} (${peakDay.rating}/10)</span>
+                        </div>
+                        <p style="font-size:0.84rem; color:var(--text-dark); line-height:1.4">${escapeHTML(peakDay.text)}</p>
+                    </div>
+                    
+                    <div style="background-color:var(--white); border:1px solid var(--card-border); padding:12px; border-radius:var(--border-radius-md)">
+                        <div style="display:flex; justify-content:space-between; margin-bottom:4px">
+                            <span style="font-size:0.8rem; font-weight:700; color:var(--danger)">📉 EN ZOR ANIN</span>
+                            <span style="font-size:0.75rem; font-weight:700; color:var(--text-muted)">${valleyDay.dateStr} (${valleyDay.rating}/10)</span>
+                        </div>
+                        <p style="font-size:0.84rem; color:var(--text-dark); line-height:1.4">${escapeHTML(valleyDay.text)}</p>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // Paylaşım ve indirme eylemlerini bağla
+        document.getElementById('btn-share-report').addEventListener('click', shareReportCard);
+        document.getElementById('btn-download-report').addEventListener('click', downloadReportCard);
+    }
+
+    function renderEmptyReportsView() {
+        reportDetailsContainer.innerHTML = `
+            <div class="empty-entries-view">
+                <span class="empty-entries-icon">🍃</span>
+                <h4 style="font-weight:700; margin-bottom:4px">Henüz Analiz Kartı Yok</h4>
+                <p class="empty-entries-text">Dönemsel raporlarının oluşturulması için en az 1 günlük yazmalısın. Günlüklerini oluşturdukça burası renklenecek!</p>
+            </div>
+        `;
+    }
+
+    function renderEmptyPeriodView(periodLabel) {
+        reportDetailsContainer.innerHTML = `
+            <div class="empty-entries-view">
+                <span class="empty-entries-icon">⏳</span>
+                <h4 style="font-weight:700; margin-bottom:4px">Bu Dönemde Kayıt Yok</h4>
+                <p class="empty-entries-text">Bu ${periodLabel.toLowerCase()} zaman diliminde yazılmış hiçbir günlüğün bulunmuyor. Yazdıkça raporun anında hazır olacak.</p>
+            </div>
+        `;
+    }
+
+    // ==========================================================================
+    // 15. HTML5 CANVAS GÖRSEL KART ÇİZİM MOTORU (INSTAGRAM STORY FORMATI)
+    // ==========================================================================
+    
+    function drawReportOnCanvas(callback) {
+        if (!currentCalculatedReport) return;
+        
+        const data = currentCalculatedReport;
+        
+        // 600px x 800px Premium Paylaşım Boyutu (Story / WhatsApp için ideal)
+        const canvas = document.createElement('canvas');
+        canvas.width = 600;
+        canvas.height = 800;
+        const ctx = canvas.getContext('2d');
+        
+        // 1. Arka Plan Degradesi (Cozy Cream -> Sunset Peach)
+        const bgGrad = ctx.createLinearGradient(0, 0, 0, 800);
+        bgGrad.addColorStop(0, '#fdfaf7');
+        bgGrad.addColorStop(1, '#feece2');
+        ctx.fillStyle = bgGrad;
+        ctx.fillRect(0, 0, 600, 800);
+        
+        // 2. Arka Plan Süsleyici Baloncuklar
+        ctx.fillStyle = 'rgba(242, 125, 82, 0.05)';
+        ctx.beginPath();
+        ctx.arc(600, 0, 180, 0, 2 * Math.PI);
+        ctx.fill();
+        
+        ctx.fillStyle = 'rgba(249, 178, 108, 0.04)';
+        ctx.beginPath();
+        ctx.arc(0, 450, 120, 0, 2 * Math.PI);
+        ctx.fill();
+        
+        // 3. İç Çerçeve Kenarlığı (Minimalist & Klas)
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 14;
+        ctx.strokeRect(20, 20, 560, 760);
+        
+        ctx.strokeStyle = 'rgba(242, 125, 82, 0.1)';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(34, 34, 532, 732);
+
+        // Alt Çizgi Vurgusu
+        ctx.fillStyle = '#f27d52';
+        ctx.fillRect(34, 760, 532, 6);
+        
+        // 4. Logo ve Üst Başlık Çizimi
+        ctx.font = 'bold 15px Outfit, sans-serif';
+        ctx.fillStyle = '#f27d52';
+        ctx.textAlign = 'center';
+        ctx.fillText(`${data.period.toUpperCase()} GÜNCE ÖZETİ`, 300, 85);
+        
+        // Başlık Çizgileri
+        ctx.strokeStyle = 'rgba(242, 125, 82, 0.2)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(100, 80); ctx.lineTo(160, 80);
+        ctx.moveTo(440, 80); ctx.lineTo(500, 80);
+        ctx.stroke();
+        
+        // Kullanıcı Ruh Hali Başlığı
+        ctx.font = 'bold 28px Outfit, sans-serif';
+        ctx.fillStyle = '#392d2b';
+        ctx.fillText(`${data.userName}'in Ruh Hali`, 300, 130);
+        
+        // 5. Ortalama Puan (Devasa Puan Halkası)
+        ctx.font = 'bold 100px Outfit, sans-serif';
+        ctx.fillStyle = '#f27d52';
+        ctx.textAlign = 'center';
+        ctx.fillText(data.avgRating, 300, 260);
+        
+        ctx.font = '500 24px Outfit, sans-serif';
+        ctx.fillStyle = '#8c7672';
+        ctx.fillText('/ 10', 300, 300);
+        
+        // 6. Öne Çıkan Duygular Başlığı
+        ctx.font = 'bold 16px Outfit, sans-serif';
+        ctx.fillStyle = '#8c7672';
+        ctx.fillText('ÖNE ÇIKAN HİSLER', 300, 360);
+        
+        // Duygu Pill'leri Çizimi (Canvas üzerinde yan yana kutular)
+        if (data.emotions.length > 0) {
+            ctx.font = 'bold 16px Outfit, sans-serif';
+            
+            // Toplam genişlik hesabı yaparak merkezleme
+            let pillsWidth = 0;
+            const gap = 12;
+            const paddingX = 14;
+            const paddingY = 8;
+            const pillsData = [];
+            
+            data.emotions.forEach(emo => {
+                const text = `${emo.emoji} ${emo.text}`;
+                const w = ctx.measureText(text).width + paddingX * 2;
+                pillsWidth += w + gap;
+                pillsData.push({ text, w });
+            });
+            pillsWidth -= gap; // Sondaki boşluğu çıkar
+            
+            let startX = 300 - pillsWidth / 2;
+            const y = 380;
+            const h = 36;
+            
+            pillsData.forEach(p => {
+                // Pill Arka Planı
+                ctx.fillStyle = '#ffffff';
+                ctx.beginPath();
+                ctx.roundRect(startX, y, p.w, h, 14);
+                ctx.fill();
+                
+                ctx.strokeStyle = 'rgba(242, 125, 82, 0.15)';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.roundRect(startX, y, p.w, h, 14);
+                ctx.stroke();
+                
+                // Pill Metni
+                ctx.fillStyle = '#392d2b';
+                ctx.textAlign = 'left';
+                ctx.fillText(p.text, startX + paddingX, y + 23);
+                
+                startX += p.w + gap;
+            });
+        }
+        
+        // 7. En İyi Gün Metin Alanı
+        const quoteY = 460;
+        const quoteW = 460;
+        const quoteH = 160;
+        
+        // Tırnak Arka Plan Kutusu
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.roundRect(70, quoteY, quoteW, quoteH, 20);
+        ctx.fill();
+        
+        ctx.strokeStyle = 'rgba(242, 125, 82, 0.1)';
+        ctx.lineWidth = 1;
+        ctx.roundRect(70, quoteY, quoteW, quoteH, 20);
+        ctx.stroke();
+        
+        // Çift Tırnak Dekoru (Büyük ve transparan)
+        ctx.font = 'bold 80px Georgia, serif';
+        ctx.fillStyle = 'rgba(242, 125, 82, 0.08)';
+        ctx.fillText('“', 94, quoteY + 70);
+        
+        // Zirve Tarih Alt Başlığı
+        ctx.font = 'bold 12px Outfit, sans-serif';
+        ctx.fillStyle = '#f27d52';
+        ctx.textAlign = 'left';
+        ctx.fillText(`Peak Day • ${data.peakDate.toUpperCase()}`, 110, quoteY + 36);
+        
+        // Alıntı Metnini Sınırlar İçinde Sararak Yazdırma
+        ctx.font = 'italic 16px Outfit, sans-serif';
+        ctx.fillStyle = '#392d2b';
+        ctx.textAlign = 'left';
+        wrapText(ctx, `"${data.peakText}"`, 110, quoteY + 66, 380, 23);
+        
+        // 8. Alt Markalama (Footer)
+        ctx.font = '600 13px Outfit, sans-serif';
+        ctx.fillStyle = '#8c7672';
+        ctx.textAlign = 'center';
+        ctx.fillText('🌸 gunce.app • zihnimi dinlendiriyorum', 300, 715);
+        
+        // Çizimi tamamla ve resmi dondur
+        callback(canvas.toDataURL('image/png'));
+    }
+
+    // Canvas Metin Sarma Algoritması
+    function wrapText(context, text, x, y, maxWidth, lineHeight) {
+        var words = text.split(' ');
+        var line = '';
+        var linesCount = 0;
+
+        for(var n = 0; n < words.length; n++) {
+            var testLine = line + words[n] + ' ';
+            var metrics = context.measureText(testLine);
+            var testWidth = metrics.width;
+            if (testWidth > maxWidth && n > 0) {
+                context.fillText(line, x, y);
+                line = words[n] + ' ';
+                y += lineHeight;
+                linesCount++;
+                if (linesCount >= 3) {
+                    context.fillText(line.substring(0, line.length - 3) + '...', x, y);
+                    return;
+                }
+            }
+            else {
+                line = testLine;
+            }
+        }
+        context.fillText(line, x, y);
+    }
+
+    // Raporu Cihaza Kaydetme Eylemi
+    function downloadReportCard() {
+        if (!currentCalculatedReport) return;
+        
+        drawReportOnCanvas((dataUrl) => {
+            const downloadLink = document.createElement('a');
+            downloadLink.href = dataUrl;
+            
+            const formattedDate = new Date().toISOString().slice(0, 10);
+            downloadLink.download = `gunce-rapor-${activeReportPeriod}-${formattedDate}.png`;
+            document.body.appendChild(downloadLink);
+            downloadLink.click();
+            downloadLink.remove();
+        });
+    }
+
+    // Raporu WhatsApp/Instagram/Sosyal Medyada Paylaşma Eylemi
+    function shareReportCard() {
+        if (!currentCalculatedReport) return;
+        
+        drawReportOnCanvas((dataUrl) => {
+            fetch(dataUrl)
+                .then(res => res.blob())
+                .then(blob => {
+                    const file = new File([blob], `gunce-rapor-${activeReportPeriod}.png`, { type: 'image/png' });
+                    
+                    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                        navigator.share({
+                            files: [file],
+                            title: `Günce Raporum`,
+                            text: `Bugünlerimi Günce (Warm Journal) uygulamasıyla puanlayıp özetliyorum. 🌸`
+                        })
+                        .catch(err => {
+                            console.log("Paylaşım iptal edildi veya başarısız.");
+                        });
+                    } else {
+                        downloadReportCard();
+                        alert("Cihazınız doğrudan görsel paylaşımını desteklemiyor. Rapor görseliniz telefonunuza indirildi, galerinizden dilediğiniz sosyal ağda paylaşabilirsiniz! 📥");
+                    }
+                });
+        });
+    }
+
+    // ==========================================================================
+    // 16. BAŞLANGIÇ OTURUM VE KİLİT KONTROLÜ
+    // ==========================================================================
+    
+    // PWA açılışında direkt kilit ekranına yönlendirerek tam gizlilik sağla
+    const savedPinExists = localStorage.getItem('wj_pin');
+    if (savedPinExists) {
+        navigateTo('auth');
+        initAuthScreen();
     } else {
         navigateTo('splash');
     }

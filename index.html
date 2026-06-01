@@ -71,7 +71,7 @@
                 </div>
             </section>
             
-            <!-- 2. AUTHENTICATION (GİRİŞ/KAYIT) EKRANI -->
+            <!-- 2. AUTHENTICATION (PIN KİLİDİ) EKRANI -->
             <section id="screen-auth" class="app-screen">
                 <div class="screen-header-simple">
                     <button type="button" class="btn-back-splash" aria-label="Geri">
@@ -79,67 +79,40 @@
                     </button>
                 </div>
                 
-                <div class="auth-container">
-                    <!-- Giriş Görünümü -->
-                    <div id="auth-login-view" class="auth-view active">
-                        <h2 class="section-title">Tekrar Hoş Geldin</h2>
-                        <p class="section-desc">Kendi güvenli günlüğüne erişmek için giriş yap.</p>
-                        
-                        <form id="form-login" class="auth-form" novalidate>
-                            <div class="form-group">
-                                <label for="login-email">E-posta</label>
-                                <input type="email" id="login-email" placeholder="ornek@mail.com" required autocomplete="email">
-                                <span class="error-message">Geçerli bir e-posta girin.</span>
-                            </div>
-                            
-                            <div class="form-group">
-                                <label for="login-password">Şifre</label>
-                                <input type="password" id="login-password" placeholder="••••••••" required autocomplete="current-password">
-                                <span class="error-message">Şifre alanı boş bırakılamaz.</span>
-                            </div>
-                            
-                            <div id="login-general-error" class="general-error"></div>
-                            
-                            <button type="submit" id="btn-login-submit" class="btn btn-primary">Giriş Yap</button>
-                        </form>
-                        
-                        <div class="auth-toggle">
-                            Henüz hesabın yok mu? <button type="button" id="btn-switch-to-register">Hesap Oluştur</button>
-                        </div>
+                <div class="pin-container">
+                    <h2 class="section-title text-center" id="pin-screen-title">Şifre Belirle</h2>
+                    <p class="section-desc text-center" id="pin-screen-desc">Günlüğünü güvende tutmak için 4 haneli bir şifre seç.</p>
+                    
+                    <!-- Kurulumda İsim Girişi Alanı -->
+                    <div id="pin-setup-name-group" class="form-group pin-name-input-group" style="display: none;">
+                        <label for="pin-setup-name">Sana Nasıl Hitap Edelim? 🌸</label>
+                        <input type="text" id="pin-setup-name" placeholder="İsminiz..." maxlength="15">
                     </div>
                     
-                    <!-- Kayıt Görünümü -->
-                    <div id="auth-register-view" class="auth-view">
-                        <h2 class="section-title">Yolculuğa Başla</h2>
-                        <p class="section-desc">Günlük tutma alışkanlığı kazanmak için hemen hesap aç.</p>
-                        
-                        <form id="form-register" class="auth-form" novalidate>
-                            <div class="form-group">
-                                <label for="register-name">İsminiz</label>
-                                <input type="text" id="register-name" placeholder="Mehmet" required autocomplete="name">
-                                <span class="error-message">İsminiz en az 2 karakter olmalıdır.</span>
-                            </div>
-                            
-                            <div class="form-group">
-                                <label for="register-email">E-posta</label>
-                                <input type="email" id="register-email" placeholder="ornek@mail.com" required autocomplete="email">
-                                <span class="error-message">Geçerli bir e-posta girin.</span>
-                            </div>
-                            
-                            <div class="form-group">
-                                <label for="register-password">Şifre</label>
-                                <input type="password" id="register-password" placeholder="En az 6 karakter" minlength="6" required autocomplete="new-password">
-                                <span class="error-message">Şifreniz en az 6 karakter olmalıdır.</span>
-                            </div>
-                            
-                            <div id="register-general-error" class="general-error"></div>
-                            
-                            <button type="submit" id="btn-register-submit" class="btn btn-primary">Hesap Oluştur</button>
-                        </form>
-                        
-                        <div class="auth-toggle">
-                            Zaten üye misin? <button type="button" id="btn-switch-to-login">Giriş Yap</button>
-                        </div>
+                    <!-- PIN Noktaları (Indicators) -->
+                    <div class="pin-dots-row" id="pin-dots-row">
+                        <div class="pin-dot"></div>
+                        <div class="pin-dot"></div>
+                        <div class="pin-dot"></div>
+                        <div class="pin-dot"></div>
+                    </div>
+                    
+                    <!-- Nümerik Tuş Takımı (Keypad) -->
+                    <div class="pin-keypad">
+                        <button type="button" class="pin-key" data-value="1">1</button>
+                        <button type="button" class="pin-key" data-value="2">2</button>
+                        <button type="button" class="pin-key" data-value="3">3</button>
+                        <button type="button" class="pin-key" data-value="4">4</button>
+                        <button type="button" class="pin-key" data-value="5">5</button>
+                        <button type="button" class="pin-key" data-value="6">6</button>
+                        <button type="button" class="pin-key" data-value="7">7</button>
+                        <button type="button" class="pin-key" data-value="8">8</button>
+                        <button type="button" class="pin-key" data-value="9">9</button>
+                        <button type="button" class="pin-key-action" id="btn-pin-clear" aria-label="Temizle">C</button>
+                        <button type="button" class="pin-key" data-value="0">0</button>
+                        <button type="button" class="pin-key-action" id="btn-pin-backspace" aria-label="Geri">
+                            <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M21 4H8l-7 8 7 8h13a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z"></path><line x1="18" y1="9" x2="12" y2="15"></line><line x1="12" y1="9" x2="18" y2="15"></line></svg>
+                        </button>
                     </div>
                 </div>
             </section>
@@ -155,9 +128,14 @@
                         </div>
                     </div>
                     
-                    <button type="button" id="btn-profile-trigger" class="btn-icon" aria-label="Profil ve Ayarlar">
-                        <svg viewBox="0 0 24 24" width="22" height="22" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
-                    </button>
+                    <div class="header-actions">
+                        <button type="button" id="btn-reports-trigger" class="btn-icon" aria-label="Raporlarım">
+                            <svg viewBox="0 0 24 24" width="22" height="22" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
+                        </button>
+                        <button type="button" id="btn-profile-trigger" class="btn-icon" aria-label="Profil ve Ayarlar">
+                            <svg viewBox="0 0 24 24" width="22" height="22" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                        </button>
+                    </div>
                 </header>
                 
                 <main class="dashboard-content">
@@ -247,7 +225,10 @@
                         <svg viewBox="0 0 24 24" width="22" height="22" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
                     </button>
                     <h2 class="header-title">Yeni Bir Gün</h2>
-                    <div class="step-indicator"><span id="current-step-dot">1</span>/3</div>
+                    <div class="header-actions">
+                        <button type="button" id="btn-zen-toggle" class="btn-icon-small" aria-label="Zen Yağmur Modu" title="Zen Yağmur Modu" style="font-size: 1.15rem;">🎧</button>
+                        <div class="step-indicator"><span id="current-step-dot">1</span>/3</div>
+                    </div>
                 </header>
                 
                 <div class="write-content">
@@ -336,9 +317,9 @@
                 <div class="profile-content">
                     <!-- Kullanıcı Özet Kartı -->
                     <div class="glass-card profile-user-card">
-                        <div class="profile-avatar" id="profile-avatar-large">M</div>
-                        <h3 id="profile-name">Mehmet</h3>
-                        <p id="profile-email">ornek@mail.com</p>
+                        <div class="profile-avatar" id="profile-avatar-large">✍️</div>
+                        <h3 id="profile-name">Günlük Dostu</h3>
+                        <p id="profile-status">Anıların bu cihazda güvende 🔒</p>
                     </div>
                     
                     <!-- Bildirim Ayarları Bölümü -->
@@ -363,14 +344,23 @@
                         <p class="settings-section-desc">Günlükleriniz %100 gizlidir ve yalnızca bu cihazda barındırılır. Cihazınızı değiştirdiğinizde verilerinizi kaybetmemek için aşağıdaki araçları kullanabilirsiniz.</p>
                         
                         <div class="settings-buttons">
-                            <!-- Veri Yedekleme -->
-                            <button type="button" id="btn-backup-export" class="settings-item-btn">
-                                <div class="settings-btn-icon">📥</div>
-                                <div class="settings-btn-text">
-                                    <strong>Verileri Yedekle</strong>
-                                    <span>Tüm günlüklerinizi .json dosyası olarak indirin.</span>
-                                </div>
-                            </button>
+                             <!-- Veri Yedekleme -->
+                             <button type="button" id="btn-backup-export" class="settings-item-btn">
+                                 <div class="settings-btn-icon">📥</div>
+                                 <div class="settings-btn-text">
+                                     <strong>Verileri Yedekle</strong>
+                                     <span>Tüm günlüklerinizi .json dosyası olarak indirin.</span>
+                                 </div>
+                             </button>
+                             
+                             <!-- Günlüğü Kitaplaştır (PDF) -->
+                             <button type="button" id="btn-export-pdf" class="settings-item-btn">
+                                 <div class="settings-btn-icon">📖</div>
+                                 <div class="settings-btn-text">
+                                     <strong>Günlüğümü Kitaplaştır (PDF)</strong>
+                                     <span>Minimalist bir şiir/anı kitabı PDF şablonu oluşturur.</span>
+                                 </div>
+                             </button>
                             
                             <!-- Veri Geri Yükleme -->
                             <label for="backup-import-file" class="settings-item-btn-label">
@@ -407,6 +397,30 @@
                                 </div>
                             </button>
                         </div>
+                    </div>
+                </div>
+            </section>
+            
+            <!-- 5.1. DÖNEMSEL RAPORLARIM EKRANI -->
+            <section id="screen-reports" class="app-screen">
+                <header class="screen-header-back">
+                    <button type="button" id="btn-close-reports" class="btn-back">
+                        <svg viewBox="0 0 24 24" width="22" height="22" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+                    </button>
+                    <h2 class="header-title">Dönemsel Raporlarım</h2>
+                </header>
+                
+                <div class="reports-content">
+                    <!-- Dönem Sekmeleri -->
+                    <div class="reports-tabs">
+                        <button type="button" class="tab-btn active" data-period="weekly">Haftalık</button>
+                        <button type="button" class="tab-btn" data-period="monthly">Aylık</button>
+                        <button type="button" class="tab-btn" data-period="yearly">Yıllık</button>
+                    </div>
+                    
+                    <!-- Rapor Verileri -->
+                    <div id="report-details-container" class="report-details-container">
+                        <!-- JS ile doldurulacak istatistikler ve kart önizlemesi -->
                     </div>
                 </div>
             </section>
