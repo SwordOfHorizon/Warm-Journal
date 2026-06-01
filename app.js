@@ -81,6 +81,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const fileBackupImport = document.getElementById('backup-import-file');
     const backupFeedbackMsg = document.getElementById('backup-feedback-message');
 
+    // Bildirim Buton Elemanları
+    const btnToggleNotifications = document.getElementById('btn-toggle-notifications');
+    const notificationBtnIcon = document.getElementById('notification-btn-icon');
+    const notificationBtnTitle = document.getElementById('notification-btn-title');
+    const notificationBtnSubtitle = document.getElementById('notification-btn-subtitle');
+
     // Günlük Giriş Bileşenleri
     const entrySummaryInput = document.getElementById('entry-summary');
     const entryRatingInput = document.getElementById('entry-rating');
@@ -845,6 +851,9 @@ document.addEventListener('DOMContentLoaded', () => {
         
         backupFeedbackMsg.style.display = 'none';
         backupFeedbackMsg.className = 'backup-feedback';
+
+        // Profil her açıldığında bildirim izin durumunu kontrol et
+        checkNotificationStatus();
     }
 
     btnLogout.addEventListener('click', () => {
@@ -953,6 +962,92 @@ document.addEventListener('DOMContentLoaded', () => {
         backupFeedbackMsg.textContent = message;
         backupFeedbackMsg.style.display = 'block';
         backupFeedbackMsg.className = `backup-feedback ${type}`;
+    }
+
+    // ==========================================================================
+    // ONESIGNAL BİLDİRİM YÖNETİMİ
+    // ==========================================================================
+    window.OneSignal = window.OneSignal || [];
+    let isOneSignalSupported = false;
+
+    OneSignal.push(function() {
+        isOneSignalSupported = OneSignal.isPushNotificationsSupported();
+        
+        OneSignal.init({
+            appId: "f75ca1f4-34ec-4913-bccc-e655e9be27a3", // Kullanıcı ücretsiz OneSignal App ID'sini buraya yapıştıracak
+            safari_web_id: "web.onesignal.auto.16e01a18-5a21-4ea6-81cf-50854d588523",
+            notifyButton: {
+                enable: false, // Hazır zili devre dışı bıraktık
+            },
+        });
+        
+        // İzin durumu değiştiğinde UI'ı güncelle
+        OneSignal.on('notificationPermissionChange', function(permissionChange) {
+            updateNotificationButtonUI(permissionChange.to);
+        });
+    });
+
+    function updateNotificationButtonUI(permission) {
+        if (!btnToggleNotifications) return;
+        
+        if (!isOneSignalSupported) {
+            btnToggleNotifications.style.opacity = '0.6';
+            notificationBtnTitle.textContent = "Bildirimler Desteklenmiyor";
+            notificationBtnSubtitle.textContent = "Cihazınız veya tarayıcınız web push bildirimlerini desteklemiyor.";
+            return;
+        }
+        
+        if (permission === 'granted') {
+            btnToggleNotifications.classList.add('active');
+            notificationBtnIcon.textContent = "✅";
+            notificationBtnTitle.textContent = "Bildirimler Aktif";
+            notificationBtnSubtitle.textContent = "Her akşam tatlı bir hatırlatma alacaksınız. Kapatmak için tarayıcı ayarlarını kullanabilirsiniz.";
+        } else if (permission === 'denied') {
+            btnToggleNotifications.classList.remove('active');
+            notificationBtnIcon.textContent = "🚫";
+            notificationBtnTitle.textContent = "Bildirimler Engellendi";
+            notificationBtnSubtitle.textContent = "Tarayıcı ayarlarınızdan izinleri sıfırlayarak tekrar açabilirsiniz.";
+        } else {
+            btnToggleNotifications.classList.remove('active');
+            notificationBtnIcon.textContent = "🔔";
+            notificationBtnTitle.textContent = "Bildirimleri Aktif Et";
+            notificationBtnSubtitle.textContent = "Her akşam tatlı bir hatırlatma bildirimi alırsınız.";
+        }
+    }
+
+    function checkNotificationStatus() {
+        if (window.OneSignal && typeof OneSignal.getNotificationPermission === 'function') {
+            OneSignal.getNotificationPermission(function(permission) {
+                updateNotificationButtonUI(permission);
+            });
+        } else {
+            // SDK yüklenmediyse tarayıcı varsayılan izin durumunu kontrol et
+            if ('Notification' in window) {
+                updateNotificationButtonUI(Notification.permission);
+            } else {
+                updateNotificationButtonUI('unsupported');
+            }
+        }
+    }
+
+    // Bildirim Buton Tıklama Aksiyonu
+    if (btnToggleNotifications) {
+        btnToggleNotifications.addEventListener('click', () => {
+            if (!isOneSignalSupported) return;
+            
+            if (window.OneSignal) {
+                OneSignal.getNotificationPermission(function(permission) {
+                    if (permission === 'default') {
+                        // Tarayıcı izin arayüzünü tetikle
+                        OneSignal.showNativePrompt();
+                    } else if (permission === 'denied') {
+                        alert("Bildirim izinlerini tarayıcınızın adres çubuğundaki kilit ikonuna tıklayarak tekrar etkinleştirebilirsiniz.");
+                    } else {
+                        alert("Bildirimleriniz zaten aktif! Harika günlükler yazmaya devam edebilirsiniz.");
+                    }
+                });
+            }
+        });
     }
 
     // ==========================================================================

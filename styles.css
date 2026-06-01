@@ -1210,6 +1210,16 @@ body {
     box-shadow: var(--shadow-cozy);
 }
 
+.settings-item-btn.active {
+    border-color: var(--primary-terracotta);
+    background-color: var(--primary-terracotta-light);
+}
+
+.settings-item-btn.active .settings-btn-icon {
+    background-color: var(--white);
+    color: var(--primary-terracotta);
+}
+
 .settings-btn-icon {
     font-size: 1.5rem;
     width: 44px;

@@ -15,6 +15,9 @@
     <!-- Stylesheet -->
     <link rel="stylesheet" href="styles.css">
     
+    <!-- OneSignal Web Push SDK -->
+    <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+    
     <!-- PWA Manifest -->
     <link rel="manifest" href="manifest.json">
 </head>
@@ -336,6 +339,22 @@
                         <div class="profile-avatar" id="profile-avatar-large">M</div>
                         <h3 id="profile-name">Mehmet</h3>
                         <p id="profile-email">ornek@mail.com</p>
+                    </div>
+                    
+                    <!-- Bildirim Ayarları Bölümü -->
+                    <div class="settings-section">
+                        <h3 class="settings-section-title">🔔 Günlük Hatırlatıcı Bildirimleri</h3>
+                        <p class="settings-section-desc">Her akşam 21.00 - 22.00 arasında rastgele bir zamanda günlüğünüzü yazmanız için hatırlatma alabilirsiniz.</p>
+                        
+                        <div class="settings-buttons">
+                            <button type="button" id="btn-toggle-notifications" class="settings-item-btn">
+                                <div class="settings-btn-icon" id="notification-btn-icon">🔔</div>
+                                <div class="settings-btn-text">
+                                    <strong id="notification-btn-title">Bildirimleri Aktif Et</strong>
+                                    <span id="notification-btn-subtitle">Her akşam tatlı bir hatırlatma bildirimi alırsınız.</span>
+                                </div>
+                            </button>
+                        </div>
                     </div>
                     
                     <!-- Yedekleme & Geri Yükleme Bölümü -->
