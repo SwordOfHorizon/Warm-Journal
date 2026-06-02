@@ -554,8 +554,9 @@ document.addEventListener('DOMContentLoaded', () => {
         lfoGainNode: null,
         lfoFilterNode: null,
         lfoFilterGainNode: null,
+        fireTimer: null,
         isActive: false,
-        currentSound: localStorage.getItem('wj_zen_sound') || 'rain', // rain, ocean, wind
+        currentSound: localStorage.getItem('wj_zen_sound') || 'rain', // rain, fire, wind
         volume: localStorage.getItem('wj_zen_volume') !== null && !isNaN(parseInt(localStorage.getItem('wj_zen_volume'))) ? parseInt(localStorage.getItem('wj_zen_volume')) : 50, // 0-100
 
         init: function() {
@@ -606,37 +607,77 @@ document.addEventListener('DOMContentLoaded', () => {
                 this.noiseSource.connect(this.filterNode);
                 this.filterNode.connect(this.mainGainNode);
             } 
-            else if (this.currentSound === 'ocean') {
-                // Okyanus: Düşük geçiren filtre (320Hz) + Zaman ayarlı periyodik LFO modülasyonu
+            else if (this.currentSound === 'fire') {
+                // Şömine / Kamp Ateşi: Düşük geçiren filtre (90Hz) ile alev gürlemesi
                 this.filterNode.type = 'lowpass';
-                this.filterNode.frequency.setValueAtTime(320, this.audioCtx.currentTime);
+                this.filterNode.frequency.setValueAtTime(90, this.audioCtx.currentTime);
                 
-                // Hacim dalgalandırma LFO (0.08Hz = ~12 saniyelik dalga periyodu)
+                // Alev gürlemesi için hacim dalgalandırma LFO'su (0.5Hz = 2 saniyelik periyot)
                 this.lfoNode = this.audioCtx.createOscillator();
                 this.lfoNode.type = 'sine';
-                this.lfoNode.frequency.setValueAtTime(0.08, this.audioCtx.currentTime);
+                this.lfoNode.frequency.setValueAtTime(0.5, this.audioCtx.currentTime);
                 
                 this.lfoGainNode = this.audioCtx.createGain();
-                this.lfoGainNode.gain.setValueAtTime(0.35, this.audioCtx.currentTime);
+                this.lfoGainNode.gain.setValueAtTime(0.2, this.audioCtx.currentTime);
                 
                 this.lfoNode.connect(this.lfoGainNode);
                 
-                // Filtre kesim frekansı dalgalandırma LFO (hacim ile senkronize)
-                this.lfoFilterGainNode = this.audioCtx.createGain();
-                this.lfoFilterGainNode.gain.setValueAtTime(140, this.audioCtx.currentTime); // +/- 140Hz dalgalanma
-                this.lfoNode.connect(this.lfoFilterGainNode);
-                this.lfoFilterGainNode.connect(this.filterNode.frequency);
+                const roarGainNode = this.audioCtx.createGain();
+                roarGainNode.gain.setValueAtTime(0.6, this.audioCtx.currentTime);
                 
-                const oceanGainNode = this.audioCtx.createGain();
-                oceanGainNode.gain.setValueAtTime(0.55, this.audioCtx.currentTime);
-                
-                this.lfoGainNode.connect(oceanGainNode.gain);
+                this.lfoGainNode.connect(roarGainNode.gain);
                 
                 this.noiseSource.connect(this.filterNode);
-                this.filterNode.connect(oceanGainNode);
-                oceanGainNode.connect(this.mainGainNode);
+                this.filterNode.connect(roarGainNode);
+                roarGainNode.connect(this.mainGainNode);
                 
                 this.lfoNode.start(0);
+                
+                // Çıtırtı ve Pop seslerini periyodik olarak zamanlayan fonksiyonu başlat
+                this.fireTimer = null;
+                const playCracklePop = () => {
+                    if (!this.isActive || this.currentSound !== 'fire') return;
+                    
+                    const popSource = this.audioCtx.createBufferSource();
+                    const popDuration = 0.003 + Math.random() * 0.012; // 3ms - 15ms
+                    const popBuffer = this.audioCtx.createBuffer(1, this.audioCtx.sampleRate * popDuration, this.audioCtx.sampleRate);
+                    const popData = popBuffer.getChannelData(0);
+                    
+                    for (let i = 0; i < popData.length; i++) {
+                        const env = 1.0 - (i / popData.length);
+                        popData[i] = (Math.random() * 2 - 1) * env * (Math.random() > 0.4 ? 1.0 : -1.0);
+                    }
+                    
+                    popSource.buffer = popBuffer;
+                    
+                    const popFilter = this.audioCtx.createBiquadFilter();
+                    popFilter.type = 'bandpass';
+                    popFilter.Q.setValueAtTime(4.0, this.audioCtx.currentTime);
+                    popFilter.frequency.setValueAtTime(900 + Math.random() * 1800, this.audioCtx.currentTime); // 900Hz - 2700Hz
+                    
+                    const popGain = this.audioCtx.createGain();
+                    // Ses sürgüsü oranına göre pop sesini ayarla
+                    popGain.gain.setValueAtTime((0.025 + Math.random() * 0.07) * (this.volume / 100), this.audioCtx.currentTime);
+                    
+                    popSource.connect(popFilter);
+                    popFilter.connect(popGain);
+                    popGain.connect(this.mainGainNode);
+                    
+                    popSource.start(0);
+                    
+                    popSource.onended = () => {
+                        popSource.disconnect();
+                        popFilter.disconnect();
+                        popGain.disconnect();
+                    };
+                    
+                    // Rastgele aralıklarla çıtırdama zamanlaması (60ms - 400ms)
+                    const nextDelay = 60 + Math.random() * 340;
+                    this.fireTimer = setTimeout(playCracklePop, nextDelay);
+                };
+                
+                // İlk çıtırtıyı zamanla
+                this.fireTimer = setTimeout(playCracklePop, 100);
             } 
             else if (this.currentSound === 'wind') {
                 // Rüzgar: Dar Q (4.0) olan Bant Geçiren filtre, uğultulu esintiler.
@@ -697,6 +738,12 @@ document.addEventListener('DOMContentLoaded', () => {
         stop: function() {
             if (!this.isActive) return;
 
+            // Timer'ı temizle
+            if (this.fireTimer) {
+                clearTimeout(this.fireTimer);
+                this.fireTimer = null;
+            }
+
             // 1.0 saniye içinde sesi yumuşakça sönümlendir
             if (this.mainGainNode) {
                 this.mainGainNode.gain.setValueAtTime(this.mainGainNode.gain.value, this.audioCtx.currentTime);
@@ -733,6 +780,11 @@ document.addEventListener('DOMContentLoaded', () => {
             if (this.currentSound === soundType) return;
             this.currentSound = soundType;
             localStorage.setItem('wj_zen_sound', soundType);
+            
+            if (this.fireTimer) {
+                clearTimeout(this.fireTimer);
+                this.fireTimer = null;
+            }
             
             if (this.isActive) {
                 this.stop();
