@@ -231,6 +231,24 @@
                     </div>
                 </header>
                 
+                <!-- Zen Ambiyans Kontrol Paneli (Açılır/Kapanır) -->
+                <div id="zen-panel" class="zen-panel glass-card">
+                    <div class="zen-panel-header">
+                        <span class="zen-panel-title">🎧 Zen Odaklanma Sesi</span>
+                        <button type="button" id="btn-close-zen-panel" class="btn-icon-small" aria-label="Zen Paneli Kapat">×</button>
+                    </div>
+                    <div class="zen-sound-options">
+                        <button type="button" class="zen-sound-btn" data-sound="rain">🌧️ Yağmur</button>
+                        <button type="button" class="zen-sound-btn" data-sound="ocean">🌊 Okyanus</button>
+                        <button type="button" class="zen-sound-btn" data-sound="wind">💨 Rüzgar</button>
+                    </div>
+                    <div class="zen-volume-control">
+                        <span class="volume-icon">🔈</span>
+                        <input type="range" id="zen-volume-slider" min="0" max="100" value="50" class="custom-slider mini-slider">
+                        <span class="volume-icon">🔊</span>
+                    </div>
+                </div>
+                
                 <div class="write-content">
                     
                     <!-- Adım 1: Günlük Metni -->

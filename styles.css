@@ -1931,6 +1931,115 @@ body {
     100% { box-shadow: 0 0 0 0 hsla(14, 85%, 62%, 0); }
 }
 
+/* ==========================================================================
+   13.3. Gelişmiş Zen Ambiyans Paneli Stilleri
+   ========================================================================== */
+.zen-panel {
+    display: none;
+    flex-direction: column;
+    gap: 16px;
+    margin-bottom: 20px;
+    background-color: var(--card-bg-glass);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid var(--card-border);
+    border-radius: var(--border-radius-lg);
+    padding: 16px 20px;
+    box-shadow: var(--shadow-cozy);
+    transform: translateY(-10px);
+    opacity: 0;
+    transition: var(--transition-smooth);
+}
+
+.zen-panel.active {
+    display: flex;
+    transform: translateY(0);
+    opacity: 1;
+    animation: slideDown 0.35s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.zen-panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.zen-panel-title {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: var(--text-dark);
+}
+
+.zen-sound-options {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+}
+
+.zen-sound-btn {
+    background-color: var(--white);
+    border: 1.5px solid var(--card-border);
+    padding: 10px 6px;
+    border-radius: var(--border-radius-sm);
+    font-family: inherit;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--text-dark);
+    cursor: pointer;
+    box-shadow: var(--shadow-soft);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    transition: var(--transition-bounce);
+    outline: none;
+}
+
+.zen-sound-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-cozy);
+    border-color: var(--primary-terracotta-light);
+}
+
+.zen-sound-btn.active {
+    background-color: var(--primary-terracotta-light);
+    border-color: var(--primary-terracotta);
+    color: var(--primary-terracotta);
+    box-shadow: 0 4px 12px -2px hsla(14, 85%, 62%, 0.15);
+    transform: scale(1.03);
+}
+
+.zen-volume-control {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background-color: var(--white);
+    border: 1px solid var(--card-border);
+    border-radius: var(--border-radius-sm);
+    padding: 8px 14px;
+    box-shadow: var(--shadow-soft);
+}
+
+.volume-icon {
+    font-size: 1rem;
+    color: var(--text-muted);
+}
+
+.mini-slider {
+    flex: 1;
+    height: 6px;
+}
+
+.mini-slider::-webkit-slider-thumb {
+    width: 18px;
+    height: 18px;
+}
+
+.mini-slider::-moz-range-thumb {
+    width: 18px;
+    height: 18px;
+}
+
 /* 14. Responsive Uyum (Duyarlı Ekran Kuralları) */
 @media (max-width: 500px) {
     body {

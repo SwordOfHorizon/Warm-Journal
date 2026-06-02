@@ -5,6 +5,17 @@
 document.addEventListener('DOMContentLoaded', () => {
     
     // ==========================================================================
+    // PWA SERVICE WORKER REGISTRATION
+    // ==========================================================================
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('./OneSignalSDKWorker.js')
+                .then(reg => console.log('Service Worker registered successfully!', reg.scope))
+                .catch(err => console.error('Service Worker registration failed:', err));
+        });
+    }
+
+    // ==========================================================================
     // 1. STATE & STORAGE MANAGEMENT (VERİ KATMANI)
     // ==========================================================================
     const DB = {
@@ -148,7 +159,10 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // Zen ses sentezleyiciyi yazma ekranı kapandığında kapat
         if (screenKey !== 'write') {
-            RainSynthesizer.stop();
+            ZenSynthesizer.stop();
+            if (btnZenToggle) btnZenToggle.classList.remove('active');
+            const zenPanel = document.getElementById('zen-panel');
+            if (zenPanel) zenPanel.classList.remove('active');
         }
 
         // Dashboard açıldığında verileri güncelle
@@ -528,12 +542,21 @@ document.addEventListener('DOMContentLoaded', () => {
     // ==========================================================================
     // 7. AMBİYANS: ÇEVRİMDIŞI SENTEZLENEN ZEN YAĞMUR MOTORU (AUDIO CONTEXT)
     // ==========================================================================
-    const RainSynthesizer = {
+    // ==========================================================================
+    // 7. AMBİYANS: ÇEVRİMDIŞI ÇOK SESLİ ZEN SENTEZLEYİCİ (WEB AUDIO API)
+    // ==========================================================================
+    const ZenSynthesizer = {
         audioCtx: null,
         noiseSource: null,
-        gainNode: null,
-        lowpassFilter: null,
+        mainGainNode: null,
+        filterNode: null,
+        lfoNode: null,
+        lfoGainNode: null,
+        lfoFilterNode: null,
+        lfoFilterGainNode: null,
         isActive: false,
+        currentSound: localStorage.getItem('wj_zen_sound') || 'rain', // rain, ocean, wind
+        volume: localStorage.getItem('wj_zen_volume') !== null && !isNaN(parseInt(localStorage.getItem('wj_zen_volume'))) ? parseInt(localStorage.getItem('wj_zen_volume')) : 50, // 0-100
 
         init: function() {
             const AudioContextClass = window.AudioContext || window.webkitAudioContext;
@@ -553,12 +576,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 this.audioCtx.resume();
             }
 
+            // Beyaz Gürültü (White Noise) üret
             const sampleRate = this.audioCtx.sampleRate;
             const bufferSize = 2 * sampleRate;
             const noiseBuffer = this.audioCtx.createBuffer(1, bufferSize, sampleRate);
             const output = noiseBuffer.getChannelData(0);
             
-            // Beyaz Gürültü (White Noise) üret
             for (let i = 0; i < bufferSize; i++) {
                 output[i] = Math.random() * 2 - 1;
             }
@@ -567,24 +590,107 @@ document.addEventListener('DOMContentLoaded', () => {
             this.noiseSource.buffer = noiseBuffer;
             this.noiseSource.loop = true;
 
-            // Cozy dinlendirici yağmur gürlemesi için Lowpass Filtre
-            this.lowpassFilter = this.audioCtx.createBiquadFilter();
-            this.lowpassFilter.type = 'lowpass';
-            this.lowpassFilter.frequency.setValueAtTime(450, this.audioCtx.currentTime);
+            // Ana ses kazancı
+            this.mainGainNode = this.audioCtx.createGain();
+            this.mainGainNode.gain.setValueAtTime(0, this.audioCtx.currentTime); // fade-in from 0
 
-            // Pop/patlama sesini engellemek için yumuşak ses geçiş kazancı
-            this.gainNode = this.audioCtx.createGain();
-            this.gainNode.gain.setValueAtTime(0, this.audioCtx.currentTime);
+            // Filtre düğümü
+            this.filterNode = this.audioCtx.createBiquadFilter();
 
-            // Filtreleri birbirine bağla: Gürültü -> Düşük Geçiren Filtre -> Ses Düzeyi -> Hoparlör
-            this.noiseSource.connect(this.lowpassFilter);
-            this.lowpassFilter.connect(this.gainNode);
-            this.gainNode.connect(this.audioCtx.destination);
+            // Sentezleyici Konfigürasyonları
+            if (this.currentSound === 'rain') {
+                // Yağmur: Düşük geçiren filtre (450Hz)
+                this.filterNode.type = 'lowpass';
+                this.filterNode.frequency.setValueAtTime(450, this.audioCtx.currentTime);
+                
+                this.noiseSource.connect(this.filterNode);
+                this.filterNode.connect(this.mainGainNode);
+            } 
+            else if (this.currentSound === 'ocean') {
+                // Okyanus: Düşük geçiren filtre (320Hz) + Zaman ayarlı periyodik LFO modülasyonu
+                this.filterNode.type = 'lowpass';
+                this.filterNode.frequency.setValueAtTime(320, this.audioCtx.currentTime);
+                
+                // Hacim dalgalandırma LFO (0.08Hz = ~12 saniyelik dalga periyodu)
+                this.lfoNode = this.audioCtx.createOscillator();
+                this.lfoNode.type = 'sine';
+                this.lfoNode.frequency.setValueAtTime(0.08, this.audioCtx.currentTime);
+                
+                this.lfoGainNode = this.audioCtx.createGain();
+                this.lfoGainNode.gain.setValueAtTime(0.35, this.audioCtx.currentTime);
+                
+                this.lfoNode.connect(this.lfoGainNode);
+                
+                // Filtre kesim frekansı dalgalandırma LFO (hacim ile senkronize)
+                this.lfoFilterGainNode = this.audioCtx.createGain();
+                this.lfoFilterGainNode.gain.setValueAtTime(140, this.audioCtx.currentTime); // +/- 140Hz dalgalanma
+                this.lfoNode.connect(this.lfoFilterGainNode);
+                this.lfoFilterGainNode.connect(this.filterNode.frequency);
+                
+                const oceanGainNode = this.audioCtx.createGain();
+                oceanGainNode.gain.setValueAtTime(0.55, this.audioCtx.currentTime);
+                
+                this.lfoGainNode.connect(oceanGainNode.gain);
+                
+                this.noiseSource.connect(this.filterNode);
+                this.filterNode.connect(oceanGainNode);
+                oceanGainNode.connect(this.mainGainNode);
+                
+                this.lfoNode.start(0);
+            } 
+            else if (this.currentSound === 'wind') {
+                // Rüzgar: Dar Q (4.0) olan Bant Geçiren filtre, uğultulu esintiler.
+                // İki farklı LFO ile dalgalandırarak organik ve eşsiz rüzgar fırtınası tonu verir.
+                this.filterNode.type = 'bandpass';
+                this.filterNode.Q.setValueAtTime(4.0, this.audioCtx.currentTime);
+                this.filterNode.frequency.setValueAtTime(550, this.audioCtx.currentTime);
+                
+                // 1. Ana Esinti LFO'su (0.07Hz)
+                this.lfoNode = this.audioCtx.createOscillator();
+                this.lfoNode.type = 'sine';
+                this.lfoNode.frequency.setValueAtTime(0.07, this.audioCtx.currentTime);
+                
+                this.lfoFilterGainNode = this.audioCtx.createGain();
+                this.lfoFilterGainNode.gain.setValueAtTime(180, this.audioCtx.currentTime); // +/- 180Hz dalgalanma
+                
+                this.lfoNode.connect(this.lfoFilterGainNode);
+                this.lfoFilterGainNode.connect(this.filterNode.frequency);
+                
+                // 2. Türbülans Esintisi LFO'su (0.18Hz)
+                this.lfoFilterNode = this.audioCtx.createOscillator();
+                this.lfoFilterNode.type = 'sine';
+                this.lfoFilterNode.frequency.setValueAtTime(0.18, this.audioCtx.currentTime);
+                
+                const lfoFilterGain2 = this.audioCtx.createGain();
+                lfoFilterGain2.gain.setValueAtTime(60, this.audioCtx.currentTime);
+                
+                this.lfoFilterNode.connect(lfoFilterGain2);
+                lfoFilterGain2.connect(this.filterNode.frequency);
+                
+                // Hacim dalgalandırma (Rüzgar estikçe uğultu artar)
+                this.lfoGainNode = this.audioCtx.createGain();
+                this.lfoGainNode.gain.setValueAtTime(0.4, this.audioCtx.currentTime);
+                this.lfoNode.connect(this.lfoGainNode);
+                
+                const windGainNode = this.audioCtx.createGain();
+                windGainNode.gain.setValueAtTime(0.45, this.audioCtx.currentTime);
+                
+                this.lfoGainNode.connect(windGainNode.gain);
+                
+                this.noiseSource.connect(this.filterNode);
+                this.filterNode.connect(windGainNode);
+                windGainNode.connect(this.mainGainNode);
+                
+                this.lfoNode.start(0);
+                this.lfoFilterNode.start(0);
+            }
 
+            this.mainGainNode.connect(this.audioCtx.destination);
             this.noiseSource.start(0);
             
             // 1.5 saniye içinde sesi yumuşakça yükselt
-            this.gainNode.gain.linearRampToValueAtTime(0.12, this.audioCtx.currentTime + 1.5);
+            const targetVolume = (this.volume / 100) * 0.15;
+            this.mainGainNode.gain.linearRampToValueAtTime(targetVolume, this.audioCtx.currentTime + 1.5);
             this.isActive = true;
         },
 
@@ -592,15 +698,20 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!this.isActive) return;
 
             // 1.0 saniye içinde sesi yumuşakça sönümlendir
-            if (this.gainNode) {
-                this.gainNode.gain.setValueAtTime(this.gainNode.gain.value, this.audioCtx.currentTime);
-                this.gainNode.gain.linearRampToValueAtTime(0, this.audioCtx.currentTime + 1.0);
+            if (this.mainGainNode) {
+                this.mainGainNode.gain.setValueAtTime(this.mainGainNode.gain.value, this.audioCtx.currentTime);
+                this.mainGainNode.gain.linearRampToValueAtTime(0, this.audioCtx.currentTime + 1.0);
             }
 
             const activeSource = this.noiseSource;
+            const activeLfo = this.lfoNode;
+            const activeLfoFilter = this.lfoFilterNode;
+
             setTimeout(() => {
                 try {
                     if (activeSource) activeSource.stop();
+                    if (activeLfo) activeLfo.stop();
+                    if (activeLfoFilter) activeLfoFilter.stop();
                 } catch(e) {
                     // Zaten durdurulmuş olabilir
                 }
@@ -609,22 +720,100 @@ document.addEventListener('DOMContentLoaded', () => {
             this.isActive = false;
         },
 
+        setVolume: function(val) {
+            this.volume = val;
+            localStorage.setItem('wj_zen_volume', val);
+            if (this.isActive && this.mainGainNode) {
+                const targetVolume = (val / 100) * 0.15;
+                this.mainGainNode.gain.linearRampToValueAtTime(targetVolume, this.audioCtx.currentTime + 0.2);
+            }
+        },
+
+        changeSound: function(soundType) {
+            if (this.currentSound === soundType) return;
+            this.currentSound = soundType;
+            localStorage.setItem('wj_zen_sound', soundType);
+            
+            if (this.isActive) {
+                this.stop();
+                setTimeout(() => {
+                    this.start();
+                }, 1100);
+            }
+        },
+
         toggle: function() {
+            const zenPanel = document.getElementById('zen-panel');
             if (this.isActive) {
                 this.stop();
                 btnZenToggle.classList.remove('active');
+                if (zenPanel) zenPanel.classList.remove('active');
             } else {
                 this.start();
                 btnZenToggle.classList.add('active');
+                if (zenPanel) zenPanel.classList.add('active');
             }
         }
     };
 
+    // ==========================================================================
+    // ZEN AMBİYANS KONTROL PANELİ UI BAĞLANTILARI
+    // ==========================================================================
+    const zenPanel = document.getElementById('zen-panel');
+    const btnCloseZenPanel = document.getElementById('btn-close-zen-panel');
+    const zenSoundBtns = document.querySelectorAll('.zen-sound-btn');
+    const zenVolumeSlider = document.getElementById('zen-volume-slider');
+
     if (btnZenToggle) {
         btnZenToggle.addEventListener('click', () => {
-            RainSynthesizer.toggle();
+            // Eğer aktif değilse paneli de aç, aktifse paneli kapat ve durdur
+            ZenSynthesizer.toggle();
         });
     }
+
+    if (btnCloseZenPanel) {
+        btnCloseZenPanel.addEventListener('click', () => {
+            if (zenPanel) zenPanel.classList.remove('active');
+        });
+    }
+
+    // Ses sürgüsü event'lerini bağla
+    if (zenVolumeSlider) {
+        // Başlangıç değerini ayarla
+        zenVolumeSlider.value = ZenSynthesizer.volume;
+        
+        zenVolumeSlider.addEventListener('input', (e) => {
+            const vol = parseInt(e.target.value);
+            ZenSynthesizer.setVolume(vol);
+            
+            // Custom slider track renklendirme
+            const themeColor = 'hsl(14, 85%, 62%)';
+            zenVolumeSlider.style.background = `linear-gradient(to right, ${themeColor} 0%, ${themeColor} ${vol}%, hsl(30, 42%, 90%) ${vol}%, hsl(30, 42%, 90%) 100%)`;
+        });
+
+        // Track arkaplanını ilk yüklemede boya
+        const initialVol = ZenSynthesizer.volume;
+        const themeColor = 'hsl(14, 85%, 62%)';
+        zenVolumeSlider.style.background = `linear-gradient(to right, ${themeColor} 0%, ${themeColor} ${initialVol}%, hsl(30, 42%, 90%) ${initialVol}%, hsl(30, 42%, 90%) 100%)`;
+    }
+
+    // Ses seçim butonlarını bağla
+    zenSoundBtns.forEach(btn => {
+        // Başlangıçta kayıtlı olan sesi işaretle
+        if (btn.dataset.sound === ZenSynthesizer.currentSound) {
+            btn.classList.add('active');
+        } else {
+            btn.classList.remove('active');
+        }
+
+        btn.addEventListener('click', () => {
+            zenSoundBtns.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            
+            const soundType = btn.dataset.sound;
+            ZenSynthesizer.changeSound(soundType);
+        });
+    });
 
     // ==========================================================================
     // 8. DİKEY ŞİİRSEL GÜNLÜK KİTABI PDF PROJEKTÖRÜ (PRINT ENGINE)
