@@ -13,9 +13,8 @@ function Create-AppIcon ($size, $outputPath) {
     # Scale coordinates based on size (original grid is 100x100)
     $scale = $size / 100.0
     
-    # 1. Background Gradient Circle
-    # Outer circle is centered at 50,50 with radius 45, meaning bounds are (5, 5, 90, 90)
-    $rect = New-Object System.Drawing.RectangleF((5 * $scale), (5 * $scale), (90 * $scale), (90 * $scale))
+    # 1. Background Gradient - Full Bleed (Fills the entire square to eliminate white/transparent corners)
+    $rect = New-Object System.Drawing.RectangleF(0, 0, $size, $size)
     
     # Colors
     $colorStart = [System.Drawing.ColorTranslator]::FromHtml("#f27d52")
@@ -26,10 +25,11 @@ function Create-AppIcon ($size, $outputPath) {
     $pEnd = New-Object System.Drawing.PointF($size, $size)
     $gradBrush = New-Object System.Drawing.Drawing2D.LinearGradientBrush($pStart, $pEnd, $colorStart, $colorEnd)
     
-    # Fill background circle
-    $g.FillEllipse($gradBrush, $rect)
+    # Fill entire background
+    $g.FillRectangle($gradBrush, $rect)
     
     # 2. White Journal Center Shape (approximate the SVG path: lens shape centered at 50, 45 with w=40, h=23)
+    # Scaled slightly to fit perfectly inside maskable safe zones
     $whiteBrush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(230, [System.Drawing.Color]::White)) # opacity 0.9
     $lensRect = New-Object System.Drawing.RectangleF((30 * $scale), (33.75 * $scale), (40 * $scale), (22.5 * $scale))
     $g.FillEllipse($whiteBrush, $lensRect)
@@ -61,7 +61,7 @@ function Create-AppIcon ($size, $outputPath) {
     # Save bitmap
     $bmp.Save($outputPath, [System.Drawing.Imaging.ImageFormat]::Png)
     $bmp.Dispose()
-    Write-Host "Created icon: $outputPath ($size x $size)"
+    Write-Host "Created full-bleed PWA icon: $outputPath ($size x $size)"
 }
 
 # Get current script path
