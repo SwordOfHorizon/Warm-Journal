@@ -317,7 +317,9 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('dashboard-date').textContent = getFormattedTodayDate();
         
         const avatarEl = document.getElementById('user-avatar');
-        avatarEl.textContent = currentUser.name.charAt(0).toUpperCase();
+        if (avatarEl) {
+            avatarEl.textContent = currentUser.name.charAt(0).toUpperCase();
+        }
         
         searchBar.classList.remove('active');
         searchInput.value = '';
@@ -1208,30 +1210,37 @@ document.addEventListener('DOMContentLoaded', () => {
     function calculateStreak(entries) {
         if (entries.length === 0) return 0;
         
+        // Normalize each entry timestamp to a local midnight date timestamp
         const dates = entries.map(e => {
             const d = new Date(e.timestamp);
-            return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+            d.setHours(0, 0, 0, 0);
+            return d.getTime();
         });
         
-        const uniqueDates = [...new Set(dates)].map(dStr => new Date(dStr));
-        uniqueDates.sort((a, b) => b - a);
+        // Get unique timestamps and sort them descending (most recent first)
+        const uniqueTimestamps = [...new Set(dates)];
+        uniqueTimestamps.sort((a, b) => b - a);
         
         const today = new Date();
-        const todayStr = `${today.getFullYear()}-${today.getMonth()}-${today.getDate()}`;
+        today.setHours(0, 0, 0, 0);
+        const todayMs = today.getTime();
+        
         const yesterday = new Date(today);
         yesterday.setDate(yesterday.getDate() - 1);
-        const yesterdayStr = `${yesterday.getFullYear()}-${yesterday.getMonth()}-${yesterday.getDate()}`;
+        yesterday.setHours(0, 0, 0, 0);
+        const yesterdayMs = yesterday.getTime();
         
-        const latestEntryDateStr = `${uniqueDates[0].getFullYear()}-${uniqueDates[0].getMonth()}-${uniqueDates[0].getDate()}`;
+        const latestMs = uniqueTimestamps[0];
         
-        if (latestEntryDateStr !== todayStr && latestEntryDateStr !== yesterdayStr) {
+        if (latestMs !== todayMs && latestMs !== yesterdayMs) {
             return 0;
         }
         
         let streak = 1;
-        for (let i = 0; i < uniqueDates.length - 1; i++) {
-            const diffTime = Math.abs(uniqueDates[i] - uniqueDates[i+1]);
-            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        for (let i = 0; i < uniqueTimestamps.length - 1; i++) {
+            const diffTime = Math.abs(uniqueTimestamps[i] - uniqueTimestamps[i+1]);
+            // Difference in days
+            const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
             
             if (diffDays === 1) {
                 streak++;
@@ -1541,85 +1550,241 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ==========================================================================
-    // 13. ONESIGNAL BİLDİRİM YÖNETİMİ
+    // 13. PWA YEREL BİLDİRİM YÖNETİMİ & ZAMANLAYICI
     // ==========================================================================
-    window.OneSignal = window.OneSignal || [];
-    let isOneSignalSupported = false;
+    let notificationTimeout = null;
 
-    OneSignal.push(function() {
-        isOneSignalSupported = OneSignal.isPushNotificationsSupported();
+    function initNotificationSystem() {
+        const toggleCheckbox = document.getElementById('notification-toggle-checkbox');
+        const statusText = document.getElementById('notification-status-text');
+        const timeOptions = document.getElementById('notification-time-options');
+        const selectStart = document.getElementById('select-start-hour');
+        const selectEnd = document.getElementById('select-end-hour');
         
-        OneSignal.init({
-            appId: "c223c680-e88b-4a5f-afc5-674b0fa03ea4", // OneSignal App ID
-            safari_web_id: "web.onesignal.auto.16e01a18-5a21-4ea6-81cf-50854d588523",
-            notifyButton: {
-                enable: false,
-            },
-        });
+        if (!toggleCheckbox || !statusText || !timeOptions || !selectStart || !selectEnd) return;
         
-        OneSignal.on('notificationPermissionChange', function(permissionChange) {
-            updateNotificationButtonUI(permissionChange.to);
-        });
-    });
-
-    function updateNotificationButtonUI(permission) {
-        if (!btnToggleNotifications) return;
-        
-        if (!isOneSignalSupported) {
-            btnToggleNotifications.style.opacity = '0.6';
-            notificationBtnTitle.textContent = "Bildirimler Desteklenmiyor";
-            notificationBtnSubtitle.textContent = "Cihazınız veya tarayıcınız web push bildirimlerini desteklemiyor.";
-            return;
+        // Saat seçeneklerini doldur
+        selectStart.innerHTML = '';
+        selectEnd.innerHTML = '';
+        for (let h = 0; h < 24; h++) {
+            const optVal = h;
+            const optText = `${h.toString().padStart(2, '0')}:00`;
+            
+            const opt1 = document.createElement('option');
+            opt1.value = optVal;
+            opt1.textContent = optText;
+            selectStart.appendChild(opt1);
+            
+            const opt2 = document.createElement('option');
+            opt2.value = optVal;
+            opt2.textContent = optText;
+            selectEnd.appendChild(opt2);
         }
         
-        if (permission === 'granted') {
-            btnToggleNotifications.classList.add('active');
-            notificationBtnIcon.textContent = "✅";
-            notificationBtnTitle.textContent = "Bildirimler Aktif";
-            notificationBtnSubtitle.textContent = "Her akşam tatlı bir hatırlatma alacaksınız. Kapatmak için tarayıcı ayarlarını kullanabilirsiniz.";
-        } else if (permission === 'denied') {
-            btnToggleNotifications.classList.remove('active');
-            notificationBtnIcon.textContent = "🚫";
-            notificationBtnTitle.textContent = "Bildirimler Engellendi";
-            notificationBtnSubtitle.textContent = "Tarayıcı ayarlarınızdan izinleri sıfırlayarak tekrar açabilirsiniz.";
+        // Değerleri localStorage'dan yükle
+        const enabled = localStorage.getItem('wj_notif_enabled') === 'true';
+        const startHour = parseInt(localStorage.getItem('wj_notif_start') || '21');
+        const endHour = parseInt(localStorage.getItem('wj_notif_end') || '22');
+        
+        toggleCheckbox.checked = enabled;
+        selectStart.value = startHour;
+        selectEnd.value = endHour;
+        
+        updateNotifUI(enabled);
+        
+        // Değişiklikleri dinle
+        toggleCheckbox.addEventListener('change', (e) => {
+            const isChecked = e.target.checked;
+            
+            if (isChecked) {
+                // Tarayıcıdan bildirim izni iste
+                if ('Notification' in window) {
+                    Notification.requestPermission().then(permission => {
+                        if (permission === 'granted') {
+                            localStorage.setItem('wj_notif_enabled', 'true');
+                            updateNotifUI(true);
+                            scheduleNextNotification();
+                        } else {
+                            alert("Bildirim izni reddedildi. Ayarlarınızdan bildirim izni vererek tekrar deneyebilirsiniz.");
+                            toggleCheckbox.checked = false;
+                            localStorage.setItem('wj_notif_enabled', 'false');
+                            updateNotifUI(false);
+                        }
+                    });
+                } else {
+                    alert("Cihazınız bildirimleri desteklemiyor.");
+                    toggleCheckbox.checked = false;
+                    localStorage.setItem('wj_notif_enabled', 'false');
+                    updateNotifUI(false);
+                }
+            } else {
+                localStorage.setItem('wj_notif_enabled', 'false');
+                updateNotifUI(false);
+                cancelScheduledNotification();
+            }
+        });
+        
+        selectStart.addEventListener('change', () => {
+            let start = parseInt(selectStart.value);
+            let end = parseInt(selectEnd.value);
+            
+            if (start >= end) {
+                // Eğer başlangıç bitişe eşit veya büyükse bitişi otomatik olarak başlangıç + 1 yap
+                end = (start + 1) % 24;
+                selectEnd.value = end;
+            }
+            
+            localStorage.setItem('wj_notif_start', start.toString());
+            localStorage.setItem('wj_notif_end', end.toString());
+            
+            if (toggleCheckbox.checked) {
+                scheduleNextNotification(true); // Süreyi sıfırla ve yeniden planla
+            }
+        });
+        
+        selectEnd.addEventListener('change', () => {
+            let start = parseInt(selectStart.value);
+            let end = parseInt(selectEnd.value);
+            
+            if (end <= start) {
+                // Eğer bitiş başlangıca eşit veya küçükse başlangıcı bitiş - 1 yap
+                start = (end - 1 + 24) % 24;
+                selectStart.value = start;
+            }
+            
+            localStorage.setItem('wj_notif_start', start.toString());
+            localStorage.setItem('wj_notif_end', end.toString());
+            
+            if (toggleCheckbox.checked) {
+                scheduleNextNotification(true);
+            }
+        });
+        
+        if (enabled) {
+            scheduleNextNotification();
+        }
+    }
+
+    function updateNotifUI(enabled) {
+        const statusText = document.getElementById('notification-status-text');
+        const timeOptions = document.getElementById('notification-time-options');
+        
+        if (!statusText || !timeOptions) return;
+        
+        if (enabled) {
+            statusText.textContent = "Açık";
+            statusText.style.color = "var(--primary-terracotta)";
+            timeOptions.style.display = "flex";
         } else {
-            btnToggleNotifications.classList.remove('active');
-            notificationBtnIcon.textContent = "🔔";
-            notificationBtnTitle.textContent = "Bildirimleri Aktif Et";
-            notificationBtnSubtitle.textContent = "Her akşam tatlı bir hatırlatma bildirimi alırsınız.";
+            statusText.textContent = "Kapalı";
+            statusText.style.color = "var(--text-muted)";
+            timeOptions.style.display = "none";
+        }
+    }
+
+    function scheduleNextNotification(forceRegenerate = false) {
+        cancelScheduledNotification();
+        
+        const startHour = parseInt(localStorage.getItem('wj_notif_start') || '21');
+        const endHour = parseInt(localStorage.getItem('wj_notif_end') || '22');
+        
+        let targetTimeMs = parseInt(localStorage.getItem('wj_notif_target_time') || '0');
+        
+        const now = new Date();
+        
+        // Eğer hedef zaman geçmişse veya zorla yeniden üretilmesi istenmişse yeni bir zaman planla
+        if (forceRegenerate || targetTimeMs <= now.getTime()) {
+            // Başlangıç ve bitiş dakikalarını hesapla
+            const startMins = startHour * 60;
+            let endMins = endHour * 60;
+            
+            if (endMins <= startMins) {
+                endMins += 24 * 60; // Gece yarısını aşan aralıklar için
+            }
+            
+            // Aralıkta rastgele bir dakika seç
+            const randomOffset = Math.floor(Math.random() * (endMins - startMins));
+            const selectedTotalMins = startMins + randomOffset;
+            
+            const selectedHour = Math.floor(selectedTotalMins / 60) % 24;
+            const selectedMin = selectedTotalMins % 60;
+            
+            const targetDate = new Date();
+            targetDate.setHours(selectedHour, selectedMin, 0, 0);
+            
+            // Eğer planlanan zaman bugün geçmişse yarına planla
+            if (targetDate.getTime() <= now.getTime()) {
+                targetDate.setDate(targetDate.getDate() + 1);
+            }
+            
+            targetTimeMs = targetDate.getTime();
+            localStorage.setItem('wj_notif_target_time', targetTimeMs.toString());
+        }
+        
+        const delay = targetTimeMs - now.getTime();
+        const targetDateObj = new Date(targetTimeMs);
+        
+        // Arayüzde bir sonraki bildirimin zamanını göster
+        const infoText = document.getElementById('next-notification-info-text');
+        if (infoText) {
+            const isToday = targetDateObj.getDate() === now.getDate();
+            const dayLabel = isToday ? "bugün" : "yarın";
+            const timeLabel = `${targetDateObj.getHours().toString().padStart(2, '0')}:${targetDateObj.getMinutes().toString().padStart(2, '0')}`;
+            infoText.textContent = `🌸 Bir sonraki hatırlatıcı ${dayLabel} saat ${timeLabel}'da gelecek.`;
+        }
+        
+        // Zamanlayıcıyı ayarla
+        if (delay > 0) {
+            notificationTimeout = setTimeout(() => {
+                triggerLocalNotification();
+                // Bildirim tetiklendikten sonra bir sonraki bildirimi planla
+                scheduleNextNotification(true);
+            }, delay);
+        }
+    }
+
+    function cancelScheduledNotification() {
+        if (notificationTimeout) {
+            clearTimeout(notificationTimeout);
+            notificationTimeout = null;
+        }
+    }
+
+    function triggerLocalNotification() {
+        if (Notification.permission !== 'granted') return;
+        
+        const title = "Günlük Yazma Zamanı 🌸";
+        const options = {
+            body: "Bugün senin için nasıldı? Birkaç cümleyle gününü kaydetmek ister misin?",
+            icon: './icon-192.png',
+            badge: './icon-192.png',
+            vibrate: [100, 50, 100],
+            data: {
+                timestamp: Date.now()
+            }
+        };
+        
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.ready.then(reg => {
+                reg.showNotification(title, options);
+            }).catch(() => {
+                new Notification(title, options);
+            });
+        } else {
+            new Notification(title, options);
         }
     }
 
     function checkNotificationStatus() {
-        if (window.OneSignal && typeof OneSignal.getNotificationPermission === 'function') {
-            OneSignal.getNotificationPermission(function(permission) {
-                updateNotificationButtonUI(permission);
-            });
-        } else {
-            if ('Notification' in window) {
-                updateNotificationButtonUI(Notification.permission);
-            } else {
-                updateNotificationButtonUI('unsupported');
+        const toggleCheckbox = document.getElementById('notification-toggle-checkbox');
+        if (toggleCheckbox) {
+            const enabled = localStorage.getItem('wj_notif_enabled') === 'true';
+            toggleCheckbox.checked = enabled;
+            updateNotifUI(enabled);
+            if (enabled) {
+                scheduleNextNotification();
             }
         }
-    }
-
-    if (btnToggleNotifications) {
-        btnToggleNotifications.addEventListener('click', () => {
-            if (!isOneSignalSupported) return;
-            
-            if (window.OneSignal) {
-                OneSignal.getNotificationPermission(function(permission) {
-                    if (permission === 'default') {
-                        OneSignal.showNativePrompt();
-                    } else if (permission === 'denied') {
-                        alert("Bildirim izinlerini tarayıcınızın adres çubuğundaki kilit ikonuna tıklayarak tekrar etkinleştirebilirsiniz.");
-                    } else {
-                        alert("Bildirimleriniz zaten aktif! Harika günlükler yazmaya devam edebilirsiniz.");
-                    }
-                });
-            }
-        });
     }
 
     // ==========================================================================
@@ -2066,6 +2231,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // 16. BAŞLANGIÇ OTURUM VE KİLİT KONTROLÜ
     // ==========================================================================
     
+    // Bildirim sistemini başlat
+    initNotificationSystem();
+
     // PWA açılışında direkt kilit ekranına yönlendirerek tam gizlilik sağla
     const savedPinExists = localStorage.getItem('wj_pin');
     if (savedPinExists) {

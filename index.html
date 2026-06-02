@@ -343,16 +343,39 @@
                     <!-- Bildirim Ayarları Bölümü -->
                     <div class="settings-section">
                         <h3 class="settings-section-title">🔔 Günlük Hatırlatıcı Bildirimleri</h3>
-                        <p class="settings-section-desc">Her akşam 21.00 - 22.00 arasında rastgele bir zamanda günlüğünüzü yazmanız için hatırlatma alabilirsiniz.</p>
+                        <p class="settings-section-desc" id="notification-settings-desc">Günlüğünüzü yazmanız için belirlediğiniz saat aralığında rastgele bir zamanda tatlı bir hatırlatma bildirimi alabilirsiniz.</p>
                         
-                        <div class="settings-buttons">
-                            <button type="button" id="btn-toggle-notifications" class="settings-item-btn">
-                                <div class="settings-btn-icon" id="notification-btn-icon">🔔</div>
-                                <div class="settings-btn-text">
-                                    <strong id="notification-btn-title">Bildirimleri Aktif Et</strong>
-                                    <span id="notification-btn-subtitle">Her akşam tatlı bir hatırlatma bildirimi alırsınız.</span>
+                        <div class="settings-card glass-card">
+                            <div class="settings-toggle-row">
+                                <div class="settings-toggle-label">
+                                    <strong>Hatırlatıcı Bildirimler</strong>
+                                    <span id="notification-status-text">Kapalı</span>
                                 </div>
-                            </button>
+                                <label class="switch">
+                                    <input type="checkbox" id="notification-toggle-checkbox">
+                                    <span class="switch-slider round"></span>
+                                </label>
+                            </div>
+                            
+                            <div id="notification-time-options" class="notification-time-options" style="display: none;">
+                                <div class="time-range-selectors">
+                                    <div class="time-select-group">
+                                        <label for="select-start-hour">Başlangıç Saati</label>
+                                        <select id="select-start-hour" class="custom-select">
+                                            <!-- Seçenekler JS ile eklenecek -->
+                                        </select>
+                                    </div>
+                                    <div class="time-select-group">
+                                        <label for="select-end-hour">Bitiş Saati</label>
+                                        <select id="select-end-hour" class="custom-select">
+                                            <!-- Seçenekler JS ile eklenecek -->
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="next-notification-info" id="next-notification-info-text">
+                                    Bir sonraki bildirim bugün 21:30'da gelecek.
+                                </div>
+                            </div>
                         </div>
                     </div>
                     
